@@ -2,6 +2,7 @@ import { GameMap } from "@openfront/engine-api/game/GameMap";
 import {
   Nation,
   TeamGameSpawnAreas,
+  UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import type { SnapshotHeader } from "@openfront/engine-api/game/SnapshotHeader";
 import { GameConfig, GameConfigSchema } from "@openfront/engine-api/Schemas";
@@ -35,7 +36,7 @@ import {
   TrainStation,
   TrainStationSnapshot,
 } from "../game/TrainStation";
-import { UnitImpl, UnitSnapshot } from "../game/UnitImpl";
+import { StandardUnitSnapshot, UnitImpl, UnitSnapshot } from "../game/UnitImpl";
 import { newCell, newPlayerInfo } from "./CommonSchemas";
 import { EXECUTION_SNAPSHOT_TYPES } from "./ExecutionRegistry";
 import { decodeSnapshotValue, encodeSnapshotValue } from "./SnapshotCodec";
@@ -159,9 +160,13 @@ export function snapshotGameData(game: Game, opts: SnapshotOptions = {}): Root {
       }
       return rec;
     });
-    progressed ||= drain(w.units, units, (u) =>
-      w.versioned(UnitSnapshot, (u as UnitImpl).snapshot(w)),
-    );
+    progressed ||= drain(w.units, units, (u) => {
+      const data = (u as UnitImpl).snapshot(w);
+      return w.versioned(
+        data.type === UnitType.Throne ? UnitSnapshot : StandardUnitSnapshot,
+        data,
+      );
+    });
     progressed ||= drain(w.attacks, attacks, (a) =>
       w.versioned(AttackSnapshot, (a as AttackImpl).snapshot(w)),
     );

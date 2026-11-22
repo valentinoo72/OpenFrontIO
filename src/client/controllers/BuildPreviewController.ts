@@ -1168,21 +1168,17 @@ export class BuildPreviewController implements Controller {
     e: MouseUpEvent,
     endsPlacement = false,
   ): void {
-    if (this.uiState.ghostStructure === null) return;
-    const clicked = this.getTileForEvent(e);
-    const warning =
-      clicked === undefined
-        ? undefined
-        : thronePlacementWarning(
-            this.game,
-            this.uiState.ghostStructure,
-            clicked,
-          );
-    if (warning) {
-      const duration =
-        this.uiState.ghostStructure === UnitType.Throne ? 5000 : 3500;
-      showToast(warning, "red", duration);
-      return;
+    if (this.throneMap !== undefined) {
+      const selected = this.uiState.ghostStructure;
+      if (selected === null) return;
+      const clicked = this.getTileForEvent(e);
+      if (clicked !== undefined) {
+        const warning = thronePlacementWarning(this.game, selected, clicked);
+        if (warning) {
+          showToast(warning, "red", selected === UnitType.Throne ? 5000 : 3500);
+          return;
+        }
+      }
     }
     this.syncGhostState();
     if (!this.ghostUnit) return;

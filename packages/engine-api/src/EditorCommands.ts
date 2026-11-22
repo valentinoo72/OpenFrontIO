@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Structures, UnitType } from "./game/GameTypes";
+import { StandardStructures } from "./game/GameTypes";
 import { ID } from "./Schemas";
 
 /**
@@ -53,7 +53,7 @@ export const SetOwnerCommandSchema = z.object({
 
 export const PlaceStructureCommandSchema = z.object({
   type: z.literal("place_structure"),
-  unit: z.enum(Structures.types).exclude([UnitType.Throne]),
+  unit: z.enum(StandardStructures.types),
   tile: Tile,
   nation: ID,
   level: z.int().min(1).max(100),

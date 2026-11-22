@@ -4,7 +4,7 @@ import {
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
 
-export const UNIT_UPDATE_STRIDE = 22;
+export const UNIT_UPDATE_STRIDE = 21;
 
 export const OFFSET_ID = 0;
 export const OFFSET_POS = 1;
@@ -27,7 +27,8 @@ export const OFFSET_NUKE_WAIT_TICKS = 17;
 export const OFFSET_PACKED_A = 18;
 export const OFFSET_PACKED_B = 19;
 export const OFFSET_LEVEL = 20;
-export const OFFSET_CONSTRUCTION_ENDS_AT = 21;
+// Thrones never carry warship state, so their timer fits in an existing slot.
+const OFFSET_THRONE_CONSTRUCTION_ENDS_AT = OFFSET_WARSHIP_PATROL_TILE;
 
 // unitType mapping
 export const PACKED_UNIT_TYPES: readonly UnitType[] = [
@@ -390,7 +391,7 @@ export class PackedUnitUpdateDecoder {
       };
     }
 
-    return {
+    const update: UnitUpdate = {
       type: GameUpdateType.Unit,
       unitType: this.unitType,
       troops: this.troops,
@@ -410,7 +411,6 @@ export class PackedUnitUpdateDecoder {
       targetTile: this.targetTile,
       health: this.health,
       underConstruction: this.underConstruction,
-      constructionEndsAt: this.constructionEndsAt,
       level: this.level,
       hasTrainStation: this.hasTrainStation,
       trainType: this.trainType,
@@ -418,11 +418,11 @@ export class PackedUnitUpdateDecoder {
       samUpgrade,
       missileTimerQueue: [],
     };
-  }
-
-  get constructionEndsAt(): number | undefined {
-    const value = this.buffer[this.offset + OFFSET_CONSTRUCTION_ENDS_AT];
-    return Number.isNaN(value) ? undefined : value;
+    if (update.unitType === UnitType.Throne) {
+      const end = this.buffer[this.offset + OFFSET_THRONE_CONSTRUCTION_ENDS_AT];
+      if (!Number.isNaN(end)) update.constructionEndsAt = end;
+    }
+    return update;
   }
 }
 
@@ -502,8 +502,10 @@ export function packUnitUpdates(units: UnitUpdate[]): {
     );
     packedUnitUpdates[offset + OFFSET_PACKED_B] = packB(update);
     packedUnitUpdates[offset + OFFSET_LEVEL] = update.level;
-    packedUnitUpdates[offset + OFFSET_CONSTRUCTION_ENDS_AT] =
-      update.constructionEndsAt ?? NaN;
+    if (update.unitType === UnitType.Throne) {
+      packedUnitUpdates[offset + OFFSET_THRONE_CONSTRUCTION_ENDS_AT] =
+        update.constructionEndsAt ?? NaN;
+    }
 
     if (update.missileTimerQueue && update.missileTimerQueue.length > 0) {
       packedMissileTimers[timerOffset++] = update.id;

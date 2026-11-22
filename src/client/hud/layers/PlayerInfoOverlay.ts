@@ -974,8 +974,6 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
     // it to clear the open leaderboard.
     return html`
       <div
-        data-player-info-hud
-        data-visible=${this._isInfoVisible && this._isActive}
         class="max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:right-0 sm:max-lg:left-1/2 sm:max-lg:right-auto sm:max-lg:-translate-x-1/2 max-lg:z-[1001]"
         style="margin-top: calc(${barOffset}px + var(--game-health-offset, 0px));"
         @click=${() => this.hide()}

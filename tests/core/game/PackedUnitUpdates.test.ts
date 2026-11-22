@@ -51,12 +51,13 @@ describe("PackedUnitUpdates", () => {
     };
 
     const { packedUnitUpdates } = packUnitUpdatesFn([original]);
+    expect(packedUnitUpdates).toHaveLength(21);
 
     const decoder = new PackedUnitUpdateDecoder(packedUnitUpdates, 0);
     const unpacked = decoder.toUnitUpdate();
     unpacked.missileTimerQueue = original.missileTimerQueue;
 
-    expect(unpacked).toEqual(original);
+    expect(unpacked).toStrictEqual(original);
   });
 
   it("packs and unpacks a complex UnitUpdate with samUpgrade", () => {

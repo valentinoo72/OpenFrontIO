@@ -192,7 +192,6 @@ export class UnitImpl implements Unit {
       lastPos: this._lastTile,
       health: this.hasHealth() ? Number(this._health) : undefined,
       underConstruction: this._underConstruction,
-      constructionEndsAt: this._constructionEndsAt,
       targetUnitId: this._targetUnit?.id() ?? undefined,
       targetTile: this.targetTile() ?? undefined,
       missileTimerQueue: this._missileTimerQueue,
@@ -201,6 +200,9 @@ export class UnitImpl implements Unit {
       trainType: this._trainType,
       loaded: this._loaded,
     };
+    if (this._constructionEndsAt !== undefined) {
+      update.constructionEndsAt = this._constructionEndsAt;
+    }
     return update;
   }
 
@@ -861,7 +863,9 @@ export class UnitImpl implements Unit {
       destroyer: w.playerOrNull(this._destroyer),
       lastSetSafeFromPirates: this._lastSetSafeFromPirates,
       underConstruction: this._underConstruction,
-      constructionEndsAt: this._constructionEndsAt,
+      ...(this._constructionEndsAt === undefined
+        ? {}
+        : { constructionEndsAt: this._constructionEndsAt }),
       lastOwner: w.playerOrNull(this._lastOwner),
       troops: this._troops,
       missileTimerQueue: [...this._missileTimerQueue],
@@ -930,10 +934,9 @@ export class UnitImpl implements Unit {
   }
 }
 
-export const UnitSnapshot = snapshotType({
+const standardUnitSnapshot = {
   name: "Unit",
-  version: 2,
-  migrations: { 1: (data) => data },
+  version: 1,
   schema: z.object({
     id: zInt(),
     type: UnitTypeSchema,
@@ -972,7 +975,6 @@ export const UnitSnapshot = snapshotType({
     destroyer: zPlayerRef().nullable(),
     lastSetSafeFromPirates: zInt(),
     underConstruction: z.boolean(),
-    constructionEndsAt: zInt().optional(),
     lastOwner: zPlayerRef().nullable(),
     troops: zNum(),
     missileTimerQueue: z.array(zInt()),
@@ -990,6 +992,18 @@ export const UnitSnapshot = snapshotType({
         duration: zInt(),
       })
       .nullable(),
+  }),
+};
+
+export const StandardUnitSnapshot = snapshotType(standardUnitSnapshot);
+
+/** Also reads records written before the Throne countdown existed. */
+export const UnitSnapshot = snapshotType({
+  name: "Unit",
+  version: 2,
+  migrations: { 1: (data) => data },
+  schema: standardUnitSnapshot.schema.extend({
+    constructionEndsAt: zInt().optional(),
   }),
 });
 export type UnitState = z.infer<typeof UnitSnapshot.schema>;

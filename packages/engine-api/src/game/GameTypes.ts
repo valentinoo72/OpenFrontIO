@@ -243,28 +243,33 @@ export const BuildableAttacks = unitTypeGroup([
   UnitType.Warship,
 ] as const);
 
-export const Structures = unitTypeGroup([
+export const StandardStructures = unitTypeGroup([
   UnitType.City,
   UnitType.DefensePost,
   UnitType.SAMLauncher,
   UnitType.MissileSilo,
   UnitType.Port,
   UnitType.Factory,
+] as const);
+
+export const Structures = unitTypeGroup([
+  ...StandardStructures.types,
   UnitType.Throne,
 ] as const);
 
 export const BuildMenus = unitTypeGroup([
-  ...Structures.types.filter((type) => type !== UnitType.Throne),
+  ...StandardStructures.types,
   ...BuildableAttacks.types,
 ] as const);
 
 export const PlayerBuildable = unitTypeGroup([
   ...BuildMenus.types,
-  UnitType.Throne,
   UnitType.TransportShip,
 ] as const);
 
-export type PlayerBuildableUnitType = (typeof PlayerBuildable.types)[number];
+export type PlayerBuildableUnitType =
+  | (typeof PlayerBuildable.types)[number]
+  | UnitType.Throne;
 
 export enum Relation {
   Hostile = 0,

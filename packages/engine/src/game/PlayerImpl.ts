@@ -92,6 +92,10 @@ import { UnitImpl } from "./UnitImpl";
 
 // Rot re-stamps every second, so a little slack keeps the cue from strobing.
 const DECAY_CUE_GRACE_TICKS = 30;
+const KOTH_BUILDABLE_UNITS = [
+  ...PlayerBuildable.types,
+  UnitType.Throne,
+] as const;
 
 interface Target {
   tick: Tick;
@@ -1527,11 +1531,14 @@ export class PlayerImpl implements Player {
 
   public buildableUnits(
     tile: TileRef | null,
-    units: readonly PlayerBuildableUnitType[] = PlayerBuildable.types,
+    units?: readonly PlayerBuildableUnitType[],
     includeBuildPreview = false,
   ): BuildableUnit[] {
     const mg = this.mg;
     const config = mg.config();
+    units ??= config.isKingOfTheHill()
+      ? KOTH_BUILDABLE_UNITS
+      : PlayerBuildable.types;
     const rail = mg.railNetwork();
     const inSpawnPhase = mg.inSpawnPhase();
 

@@ -108,7 +108,7 @@ describe("InputHandler AutoUpgrade", () => {
     mockGameView = {
       inSpawnPhase: () => false,
       myPlayer: () => ({ isAlive: () => true }),
-      config: () => ({ gameConfig: () => ({}) }),
+      config: () => ({ gameConfig: () => ({}), isKingOfTheHill: () => false }),
     } as unknown as GameView;
     mockCanvas = document.createElement("canvas");
     mockCanvas.width = 800;
@@ -1780,7 +1780,7 @@ describe("Warship box selection (Shift+drag)", () => {
   beforeEach(() => {
     const mockGameView = {
       inSpawnPhase: () => false,
-      config: () => ({ gameConfig: () => ({}) }),
+      config: () => ({ gameConfig: () => ({}), isKingOfTheHill: () => false }),
     } as GameView;
     mockCanvas = document.createElement("canvas");
     eventBus = new EventBus();
@@ -1966,7 +1966,10 @@ describe("mobile tap-preview placement", () => {
       rocketDirectionUp: true,
     } as UIState;
     inputHandler = new InputHandler(
-      { inSpawnPhase: () => false } as GameView,
+      {
+        inSpawnPhase: () => false,
+        config: () => ({ isKingOfTheHill: () => false }),
+      } as GameView,
       uiState,
       document.createElement("canvas"),
       eventBus,
@@ -2514,6 +2517,7 @@ describe("InputHandler right-click cancels unit selection (#4692)", () => {
       {
         inSpawnPhase: () => false,
         myPlayer: () => ({ isAlive: () => true }),
+        config: () => ({ isKingOfTheHill: () => false }),
       } as unknown as GameView,
       {
         attackRatio: 20,
@@ -2542,7 +2546,7 @@ describe("InputHandler right-click cancels unit selection (#4692)", () => {
   it("opens the context menu on right-click when nothing is selected", () => {
     const emit = vi.spyOn(eventBus, "emit");
     rightClick();
-    expect(emittedTypes(emit)).toContain("ContextMenuEvent");
+    expect(emittedTypes(emit)).toEqual(["ContextMenuEvent"]);
   });
 
   it("cancels the selection and suppresses the context menu when a warship is selected", () => {
@@ -3782,7 +3786,7 @@ describe("GhostStructure Hotkeys tapping/Scrolling", () => {
     mockGameView = {
       inSpawnPhase: () => false,
       myPlayer: () => ({ isAlive: () => true }),
-      config: () => ({ gameConfig: () => ({}) }),
+      config: () => ({ gameConfig: () => ({}), isKingOfTheHill: () => false }),
     } as unknown as GameView;
     testSettings = new UserSettings();
     testSettings.removeCached(KEYBINDS_KEY, false);

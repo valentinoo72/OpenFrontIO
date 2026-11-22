@@ -2,7 +2,7 @@ import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   BuildableUnit,
   PlayerType,
-  Structures,
+  StandardStructures,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import {
@@ -1495,7 +1495,7 @@ export class ClientGameRunner {
   }
 
   private findAndUpgradeNearestBuilding(clickedTile: TileRef) {
-    this.myPlayer!.actions(clickedTile, Structures.types)
+    this.myPlayer!.actions(clickedTile, StandardStructures.types)
       .then((actions) => {
         const upgradeUnits: {
           unitId: number;

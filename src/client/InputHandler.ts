@@ -1435,7 +1435,7 @@ export class InputHandler {
 
       if (
         this.uiState.ghostStructure === null &&
-        this.gameView.config().gameConfig().kingOfTheHill === true
+        this.gameView.config().isKingOfTheHill()
       ) {
         const placement = new PlaceHoveredThroneEvent(event.x, event.y);
         this.eventBus.emit(placement);
@@ -1667,12 +1667,14 @@ export class InputHandler {
       this.eventBus.emit(new UnitSelectionEvent(null, false));
       return;
     }
-    const dismissThrone = new DismissHoveredThroneEvent(
-      event.clientX,
-      event.clientY,
-    );
-    this.eventBus.emit(dismissThrone);
-    if (dismissThrone.handled) return;
+    if (this.gameView.config().isKingOfTheHill()) {
+      const dismissThrone = new DismissHoveredThroneEvent(
+        event.clientX,
+        event.clientY,
+      );
+      this.eventBus.emit(dismissThrone);
+      if (dismissThrone.handled) return;
+    }
     this.eventBus.emit(new ContextMenuEvent(event.clientX, event.clientY));
   }
 

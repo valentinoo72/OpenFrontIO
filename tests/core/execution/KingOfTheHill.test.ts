@@ -1,4 +1,5 @@
 import {
+  BuildMenus,
   Difficulty,
   GameMapSize,
   GameMapType,
@@ -22,6 +23,7 @@ import { ConstructionExecution } from "@openfront/engine/execution/ConstructionE
 import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { createGameRunner } from "@openfront/engine/GameRunner";
+import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it, vi } from "vitest";
 import { applyGameConfigPatch } from "../../../src/server/ConfigPatch";
 import { kothFiles } from "../../util/kothMaps";
@@ -75,6 +77,26 @@ async function makeGame(count = 2, overrides: Partial<KothTestConfig> = {}) {
 }
 
 describe("KOTH core", () => {
+  it("offers the original buildable units outside King of the Hill", async () => {
+    const game = await makeGame(1, { kingOfTheHill: false });
+    expect(
+      game
+        .allPlayers()[0]
+        .buildableUnits(null)
+        .map(({ type }) => type),
+    ).toEqual([...BuildMenus.types, UnitType.TransportShip]);
+  });
+
+  it("writes the original unit snapshot record in ordinary games", async () => {
+    const game = await makeGame(1, { kingOfTheHill: false });
+    const player = game.allPlayers()[0];
+    const city = player.buildUnit(UnitType.City, player.spawnTile()!, {});
+    expect(snapshotGameData(game).units).toContainEqual({
+      v: 1,
+      d: expect.objectContaining({ id: city.id(), type: UnitType.City }),
+    });
+  });
+
   it.each([GameMapSize.Normal, GameMapSize.Compact])(
     "randomly spawns more players than the old preset capacity on %s",
     async (size) => {
@@ -261,6 +283,14 @@ describe("KOTH core", () => {
         packUnitUpdates(owned.map((t) => t.toUpdate())).packedUnitUpdates,
       )[0].constructionEndsAt,
     ).toBe(deadline);
+    expect(snapshotGameData(game).units).toContainEqual({
+      v: 2,
+      d: expect.objectContaining({
+        id: owned[0].id(),
+        type: UnitType.Throne,
+        constructionEndsAt: deadline,
+      }),
+    });
     game.addExecution(new ConstructionExecution(b, UnitType.Throne, later));
     game.executeNextTick();
     game.executeNextTick();
