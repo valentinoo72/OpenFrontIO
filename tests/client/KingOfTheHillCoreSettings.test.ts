@@ -144,7 +144,7 @@ it("does not expose KOTH in Solo or save it in Solo presets", () => {
 });
 
 it.each([true, false])(
-  "shows modifiers without lobby badges in the in-game menu (koth=%s)",
+  "uses the v36 blue modifier section in the in-game menu (koth=%s)",
   (koth) => {
     const menu = new SettingsModal() as any;
     menu.gameConfig = {
@@ -163,14 +163,15 @@ it.each([true, false])(
       startingGold: 5_000_000,
       goldMultiplier: 2,
     };
-    const data = menu.getModifierData();
-    expect(data.isSplitView).toBe(true);
+    menu.isVisible = true;
     const target = document.createElement("div");
-    renderTemplate(menu.renderGameInfo(data.isSplitView), target);
+    renderTemplate(menu.render(), target);
     expect(target.querySelector("[data-header-badges]")).toBeNull();
     expect(target.querySelector("[data-game-modifiers]")).not.toBeNull();
     const tags = target.querySelectorAll("[data-modifier-tags] span");
     expect(tags.length).toBeGreaterThan(0);
-    expect(tags[0].classList.contains("bg-malibu-blue")).toBe(false);
+    expect(
+      [...tags].every((tag) => tag.classList.contains("bg-malibu-blue")),
+    ).toBe(true);
   },
 );
