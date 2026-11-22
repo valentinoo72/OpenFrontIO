@@ -13,7 +13,7 @@ import {
   bulkCost,
   Cell,
   GameMapSize,
-  GameMapType,
+  GameMapId,
   PlayerBuildableUnitType,
   Structures,
   UnitType,
@@ -329,7 +329,7 @@ export class BuildPreviewController implements Controller {
     private transformHandler: TransformHandler,
     private view: MapRenderer,
     private userSettings: UserSettings,
-    private throneMap?: GameMapType,
+    private throneMap?: GameMapId,
     private throneMapSize = GameMapSize.Normal,
   ) {}
 

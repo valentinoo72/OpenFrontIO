@@ -1,4 +1,4 @@
-import { GameType } from "@openfront/engine-api/game/GameTypes";
+import { CustomGameMap, GameType } from "@openfront/engine-api/game/GameTypes";
 import { GameConfig } from "@openfront/engine-api/Schemas";
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
@@ -19,17 +19,12 @@ import type { UserSettingModal } from "../../UserSettingModal";
 import {
   disabledUnitsBox,
   FLAT_SETTING_TAG,
-  LOBBY_SETTING_TAG,
-  formatGameType,
-  formatGameVisibility,
   hostCheatsBox,
   hostCheatsList,
   lobbySettingTagText,
-  MODE_BADGE_CLASS,
   notableLobbySettings,
-  VISIBILITY_BADGE_CLASS,
 } from "../../utilities/LobbySettingsSummary";
-import { getMapName, homeHref, translateText } from "../../Utils";
+import { exitGame, getMapName, translateText } from "../../Utils";
 import type { GameView } from "../../view/GameView";
 const exitIcon = assetUrl("images/ExitIconWhite.svg");
 const settingsIcon = assetUrl("images/SettingIconWhite.svg");
@@ -79,10 +74,6 @@ export class SettingsModal extends LitElement implements Controller {
   /** Nations the map defines; null skips the nation-count comparison. */
   @property({ attribute: false })
   mapNationCount: number | null = null;
-
-  /** Nation-relative timestamp or indicator for hosted vs private games. */
-  @property({ type: Number })
-  visibleAt?: number;
 
   /** The running game, for saving it. */
   @property({ attribute: false })
@@ -250,13 +241,16 @@ export class SettingsModal extends LitElement implements Controller {
   // Saves are kept on the player's account: singleplayer games only, and
   // only for a signed-in account, since a guest's saves would be lost with
   // the browser's session. Not the onboarding tutorial: its overlay keeps
-  // state a save doesn't carry, so a resumed one could get stuck.
+  // state a save doesn't carry, so a resumed one could get stuck. Not a
+  // scenario's Custom map either: a save doesn't carry its terrain, and after
+  // a reload no scenario is loaded to supply it.
   private canSave(): boolean {
     const game = this.game;
     return (
       game !== null &&
       game.config().gameConfig().gameType === GameType.Singleplayer &&
       game.config().gameConfig().tutorial !== true &&
+      game.config().gameConfig().gameMap !== CustomGameMap &&
       !game.config().isReplay() &&
       responseHasLinkedIdentity(lastUserMeResponse()?.response ?? false)
     );
@@ -324,26 +318,7 @@ export class SettingsModal extends LitElement implements Controller {
 
   private onExitButtonClick() {
     // redirect to the home page
-    window.location.href = homeHref();
-  }
-
-  private renderHeaderBadges() {
-    const c = this.gameConfig ?? this.game?.config().gameConfig() ?? null;
-    if (c === null || c.kingOfTheHill) return null;
-    const visibleAt = this.visibleAt;
-    return html`
-      <div
-        class="flex flex-wrap items-center gap-2 px-3 pt-1"
-        data-header-badges
-      >
-        <span class="border rounded-md ${MODE_BADGE_CLASS}"
-          >${formatGameType(c)}</span
-        >
-        <span class="border rounded-md ${VISIBILITY_BADGE_CLASS}"
-          >${formatGameVisibility(c.gameType, visibleAt)}</span
-        >
-      </div>
-    `;
+    exitGame();
   }
 
   private getModifierData() {
@@ -357,19 +332,14 @@ export class SettingsModal extends LitElement implements Controller {
         isSplitView: false,
       };
     }
-    const settings = notableLobbySettings(c, this.mapNationCount).filter(
-      (setting) =>
-        !c.kingOfTheHill ||
-        setting.label !== translateText("game_settings.nations"),
-    );
+    const settings = notableLobbySettings(c, this.mapNationCount);
     const hasDisabledUnits = (c.disabledUnits?.length ?? 0) > 0;
     const cheats = hostCheatsList(c);
     const hasHostCheats = cheats.length > 0;
     const hasModifiers =
       settings.length > 0 || hasDisabledUnits || hasHostCheats;
     const isSplitView =
-      !c.kingOfTheHill &&
-      (hasDisabledUnits || hasHostCheats || settings.length >= 5);
+      hasDisabledUnits || hasHostCheats || settings.length >= 5;
     return {
       c,
       settings,
@@ -500,8 +470,7 @@ export class SettingsModal extends LitElement implements Controller {
                 >
                   ${settings.map(
                     (s) =>
-                      html`<span
-                        class=${c.kingOfTheHill ? `${LOBBY_SETTING_TAG} uppercase` : FLAT_SETTING_TAG}
+                      html`<span class=${FLAT_SETTING_TAG}
                         >${lobbySettingTagText(s)}</span
                       >`,
                   )}
@@ -554,9 +523,8 @@ export class SettingsModal extends LitElement implements Controller {
   }
 
   private renderGameInfo(isSplitView: boolean) {
-    const badges = this.renderHeaderBadges();
     const modifiers = this.renderModifiers();
-    if (badges === null && modifiers === null) return null;
+    if (modifiers === null) return null;
 
     return html`
       <div
@@ -566,7 +534,7 @@ export class SettingsModal extends LitElement implements Controller {
             : ""
         } flex flex-col gap-3"
       >
-        ${badges} ${modifiers}
+        ${modifiers}
       </div>
     `;
   }

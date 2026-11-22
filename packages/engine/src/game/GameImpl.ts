@@ -320,6 +320,30 @@ export class GameImpl implements Game {
     this.recordTileUpdate(tile);
   }
 
+  setTerrain(tiles: readonly TileRef[], terrain: readonly number[]): void {
+    this.recordTerrainChanges(this._waterManager.editTerrain(tiles, terrain));
+  }
+
+  endTerrainEdit(): void {
+    this.recordTerrainChanges(this._waterManager.endTerrainEdit());
+  }
+
+  downscaleMiniMap(): GameMap {
+    return this._waterManager.downscaleMiniMap();
+  }
+
+  rebuildWaterGraph(): void {
+    this._waterManager.rebuildWaterGraph();
+  }
+
+  private recordTerrainChanges(tiles: TileRef[]): void {
+    for (const tile of tiles) this.recordTileUpdate(tile);
+    if (tiles.length === 0) return;
+    this._territoryVersion++;
+    // Rail paths route around water, so a rail plan must be redone too.
+    this._structureVersion++;
+  }
+
   queueWaterConversion(tile: TileRef): void {
     if (!this.isLand(tile)) return;
     if (this.hasOwner(tile)) {
@@ -560,10 +584,9 @@ export class GameImpl implements Game {
 
   private addViewResync(): void {
     const map = this._map as GameMapImpl;
-    const terrainEdited = new Set(map.editedTerrainTiles());
     const numTiles = map.width() * map.height();
     for (let tile = 0; tile < numTiles; tile++) {
-      if (map.tileState(tile) !== 0 || terrainEdited.has(tile)) {
+      if (map.tileState(tile) !== 0 || map.isTerrainEdited(tile)) {
         this.recordTileUpdate(tile);
       }
     }
@@ -684,9 +707,29 @@ export class GameImpl implements Game {
       if (throne.owner() !== holder) holder.captureUnit(throne);
       const team = holder.team();
       if (team === ColoredTeams.Bot) continue;
-      this.setWinner(team ?? holder, this.stats().stats());
+      // A throne victory has no land-share requirement for team win credit.
+      this.setWinner(team ?? holder, this.stats().stats(), 0);
       return;
     }
+  }
+
+  /**
+   * Hands over the updates made since the game started, without running a
+   * tick: what the scenario editor's commands changed, in an engine that
+   * never ticks. Players get their updates as at the end of a tick. (After a
+   * tick, the updates still hold that tick's, already handed over.)
+   */
+  drainPendingUpdates(): GameUpdates {
+    for (const player of this._playersBySmallID) {
+      const update = player.toUpdate(
+        this.playerStatsQuads,
+        this.attackTroopsQuads,
+      );
+      if (update !== null) this.addUpdate(update);
+    }
+    const updates = this.updates;
+    this.updates = createGameUpdatesMap();
+    return updates;
   }
 
   private recordTileUpdate(tile: TileRef): void {
@@ -940,6 +983,53 @@ export class GameImpl implements Game {
     this.nextPlayerID++;
     this._players.set(playerInfo.id, player);
     return player;
+  }
+
+  /** Scenario editor: a nation with no spawn, which gets land by set_owner. */
+  addNation(info: PlayerInfo): Player {
+    const player = this.addPlayer(info);
+    this._nations.push(new Nation(undefined, info));
+    return player;
+  }
+
+  /**
+   * Scenario editor: deletes the nation's structures, frees its land and
+   * forgets its id. Its small id stays taken, so what is left is a dead
+   * player that no longer appears under its id or among the nations.
+   */
+  removeNation(nation: Player): void {
+    for (const unit of [...nation.units()]) unit.delete(false);
+    for (const tile of [...nation.tiles()]) this.relinquish(tile);
+    this._players.delete(nation.id());
+    this._nations = this._nations.filter(
+      (n) => n.playerInfo.id !== nation.id(),
+    );
+  }
+
+  /**
+   * Scenario editor: brings back a nation removeNation removed, under its
+   * id and small id, as a new nation would start.
+   */
+  restoreNation(info: PlayerInfo): void {
+    const nation = this._playersBySmallID.find((p) => p.id() === info.id);
+    if (!(nation instanceof PlayerImpl) || this._players.has(info.id)) {
+      throw new Error(`no removed nation ${info.id}`);
+    }
+    nation.setPlayerInfo(info);
+    nation.setTroops(this.config().startManpower(info));
+    nation.setGold(this.config().startingGold(info));
+    nation.setPlayable(false);
+    this._players.set(info.id, nation);
+    this._nations.push(new Nation(undefined, info));
+  }
+
+  /** Scenario editor: renames a nation or changes its flag. */
+  setNationInfo(nation: Player, info: PlayerInfo): void {
+    nation.setPlayerInfo(info);
+    // The nation and its player share one PlayerInfo, as in a new game.
+    this._nations = this._nations.map((n) =>
+      n.playerInfo.id === info.id ? new Nation(n.spawnCell, info) : n,
+    );
   }
 
   private maybeAssignTeam(player: PlayerInfo): Team | null {
@@ -1205,6 +1295,7 @@ export class GameImpl implements Game {
   setWinner(
     winner: Player | Team | null,
     allPlayersStats: AllPlayersStats,
+    teamWinThreshold?: number,
   ): void {
     this._winner = winner;
     if (this._config.isKingOfTheHill()) {
@@ -1225,7 +1316,8 @@ export class GameImpl implements Game {
     }
     this.addUpdate({
       type: GameUpdateType.Win,
-      winner: winner === null ? undefined : this.makeWinner(winner),
+      winner:
+        winner === null ? undefined : this.makeWinner(winner, teamWinThreshold),
       allPlayersStats,
     });
   }
@@ -1250,11 +1342,13 @@ export class GameImpl implements Game {
     );
   }
 
-  makeWinner(winner: string | Player): Winner | undefined {
+  makeWinner(
+    winner: string | Player,
+    teamWinThreshold?: number,
+  ): Winner | undefined {
     if (typeof winner === "string") {
-      const threshold = this._config.isKingOfTheHill()
-        ? 0
-        : this._config.teamLandShareWinThresholdTenths();
+      const threshold =
+        teamWinThreshold ?? this._config.teamLandShareWinThresholdTenths();
       return [
         "team",
         winner,
@@ -1546,6 +1640,9 @@ export class GameImpl implements Game {
   }
   setMagnitude(ref: TileRef, value: number): void {
     this._map.setMagnitude(ref, value);
+  }
+  setTerrainByte(ref: TileRef, value: number): void {
+    this._map.setTerrainByte(ref, value);
   }
   ownerID(ref: TileRef): number {
     return this._map.ownerID(ref);

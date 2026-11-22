@@ -26,7 +26,9 @@ import { describe, expect, it } from "vitest";
 import { applyGameConfigPatch } from "../../../src/server/ConfigPatch";
 import { kothFiles } from "../../util/kothMaps";
 
-function config(overrides: Partial<GameConfig> = {}): GameConfig {
+type KothTestConfig = GameConfig & { gameMap: GameMapType };
+
+function config(overrides: Partial<KothTestConfig> = {}): KothTestConfig {
   return {
     gameMap: GameMapType.Tourney4,
     gameMapSize: GameMapSize.Normal,
@@ -49,7 +51,7 @@ function config(overrides: Partial<GameConfig> = {}): GameConfig {
   };
 }
 
-async function makeGame(count = 2, overrides: Partial<GameConfig> = {}) {
+async function makeGame(count = 2, overrides: Partial<KothTestConfig> = {}) {
   const c = config(overrides);
   const start: GameStartInfo = {
     gameID: "koth-test",

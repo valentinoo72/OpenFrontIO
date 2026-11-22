@@ -59,7 +59,6 @@ export function createRenderer(
   playerRole: string | null,
   view: MapRenderer,
   mapLayerController?: MapLayerController,
-  visibleAt?: number,
 ): GameRenderer {
   const transformHandler = new TransformHandler(game, eventBus, inputEl);
   const userSettings = new UserSettings();
@@ -204,7 +203,6 @@ export function createRenderer(
   settingsModal.gameConfig = game.config().gameConfig();
   settingsModal.mapNationCount = game.mapNationCount();
   settingsModal.game = game;
-  settingsModal.visibleAt = visibleAt;
 
   // The in-game settings instance needs the bus so the Audio sliders reach
   // SoundManager, which caches its volumes at construction, and UIState so the
@@ -397,22 +395,52 @@ export function createRenderer(
     performanceOverlay,
   ];
 
+  const singletonLayers = new Set<Controller>([
+    eventsDisplay,
+    actionableEvents,
+    attacksDisplay,
+    chatDisplay,
+    buildMenu,
+    spawnTimer,
+    immunityTimer,
+    gameLeftSidebar,
+    unitDisplay,
+    gameRightSidebar,
+    controlPanel,
+    playerInfo,
+    winModal,
+    newLobbyPrompt,
+    replayPanel,
+    settingsModal,
+    playerPanel,
+    headsUpMessage,
+    multiTabModal,
+    inGamePromo,
+    tutorialPanel,
+    onboardingOverlay,
+    alertFrame,
+    performanceOverlay,
+  ]);
+
   return new GameRenderer(
     transformHandler,
     uiState,
     layers,
     performanceOverlay,
+    singletonLayers,
   );
 }
 
 export class GameRenderer {
   private layerTickState = new Map<Controller, { lastTickAtMs: number }>();
+  private layerDisposers = new Map<Controller, () => void>();
 
   constructor(
     public transformHandler: TransformHandler,
     public uiState: UIState,
     private layers: Controller[],
     private performanceOverlay: PerformanceOverlay,
+    private singletonLayers: ReadonlySet<Controller> = new Set(),
   ) {}
 
   private canvasSizeObserver: ResizeObserver | null = null;
@@ -426,7 +454,13 @@ export class GameRenderer {
       console.warn("Failed to preload sprites:", err),
     );
 
-    this.layers.forEach((l) => l.init?.());
+    this.layerDisposers.clear();
+    for (const l of this.layers) {
+      const disposer = l.init?.();
+      if (typeof disposer === "function") {
+        this.layerDisposers.set(l, disposer);
+      }
+    }
 
     window.addEventListener("resize", this.onResize);
     this.canvasSizeObserver = this.transformHandler.observeCanvasSize();
@@ -436,10 +470,24 @@ export class GameRenderer {
   }
 
   dispose() {
-    for (const layer of this.layers) layer.dispose?.();
     window.removeEventListener("resize", this.onResize);
     this.canvasSizeObserver?.disconnect();
     this.canvasSizeObserver = null;
+    for (const layer of this.layers) {
+      try {
+        if (this.layerDisposers.has(layer)) {
+          const disposer = this.layerDisposers.get(layer)!;
+          this.layerDisposers.delete(layer);
+          disposer();
+        } else if (this.singletonLayers.has(layer)) {
+          continue;
+        } else {
+          layer.dispose?.();
+        }
+      } catch (e) {
+        console.error("Failed to dispose HUD layer:", e);
+      }
+    }
   }
 
   tick() {

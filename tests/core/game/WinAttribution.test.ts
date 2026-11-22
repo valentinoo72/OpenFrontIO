@@ -1,15 +1,20 @@
 import {
+  GameMapType,
   GameMode,
+  GameType,
   PlayerInfo,
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
+import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
+import { GameConfig } from "@openfront/engine-api/Schemas";
 import { MarkDisconnectedExecution } from "@openfront/engine/execution/MarkDisconnectedExecution";
+import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
 import { GameImpl } from "@openfront/engine/game/GameImpl";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { setup } from "../../util/Setup";
 
 describe("Win Attribution Bug Fix", () => {
-  async function createTeamGame() {
+  async function createTeamGame(overrides: Partial<GameConfig> = {}) {
     const pAInfo = new PlayerInfo(
       "PlayerA",
       PlayerType.Human,
@@ -53,7 +58,7 @@ describe("Win Attribution Bug Fix", () => {
 
     const game = (await setup(
       "plains",
-      { gameMode: GameMode.Team, playerTeams: 2 },
+      { gameMode: GameMode.Team, playerTeams: 2, ...overrides },
       [pAInfo, pBInfo, pCInfo, pDInfo],
     )) as GameImpl;
 
@@ -300,6 +305,29 @@ describe("Win Attribution Bug Fix", () => {
     expect(snap).not.toBeNull();
     expect(snap?.wasAlive).toBe(true);
     expect(snap?.teamTiles).toBeGreaterThan(0);
+  });
+
+  test("hosted KOTH Overtime land wins use the usual team win credit", async () => {
+    const { game, pA, pB, landTiles } = await createTeamGame({
+      gameMap: GameMapType.Luna,
+      gameType: GameType.Private,
+      kingOfTheHill: true,
+      overtime: { enabled: true, startMinutes: 1 },
+    });
+    pA.setSpawnTile(landTiles[0]);
+    pA.conquer(landTiles[0]);
+    pB.setSpawnTile(landTiles[1]);
+    pB.conquer(landTiles[1]);
+    new MarkDisconnectedExecution(pA, true).init(game, 0);
+    game.forEachTile((tile) => {
+      if (game.map().isLand(tile) && !game.hasOwner(tile)) pB.conquer(tile);
+    });
+
+    vi.spyOn(game, "elapsedGameSeconds").mockReturnValue(120);
+    game.addExecution(new WinCheckExecution());
+    while (game.ticks() < 10) game.executeNextTick();
+    const win = game.executeNextTick()[GameUpdateType.Win][0];
+    expect(win?.winner).toEqual(["team", pB.team(), "clientB"]);
   });
 
   test("Test 9: Integer land share precision and threshold evaluation", async () => {

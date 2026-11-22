@@ -1,5 +1,9 @@
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
-import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
+import {
+  GameMapId,
+  GameMapSize,
+  GameMapType,
+} from "@openfront/engine-api/game/GameTypes";
 import { ReadonlyTileSet } from "@openfront/engine-api/game/ReadViews";
 
 export const THRONE_COST = 2_000_000n;
@@ -27,7 +31,7 @@ type Site = { bounds: ThroneSiteBounds; seed: Point };
 
 // All coordinates use the normal map assets; compact maps scale them by 1/2.
 // Island seeds select connected passable land, excluding water and impassable terrain.
-const sites: Partial<Record<GameMapType, readonly Site[]>> = {
+const sites: Partial<Record<GameMapId, readonly Site[]>> = {
   [GameMapType.Tourney3]: [{ bounds: [690, 686, 815, 812], seed: [750, 750] }],
   [GameMapType.Tourney4]: [{ bounds: [689, 683, 815, 809], seed: [751, 746] }],
   [GameMapType.Surrounded]: [
@@ -50,7 +54,9 @@ const sites: Partial<Record<GameMapType, readonly Site[]>> = {
   [GameMapType.Sol]: [{ bounds: [1937, 987, 2496, 1546], seed: [2216, 1050] }],
 };
 
-export function isKingOfTheHillMap(type: GameMapType): boolean {
+export function isKingOfTheHillMap(
+  type: GameMapId,
+): type is (typeof KING_OF_THE_HILL_MAPS)[number] {
   return sites[type] !== undefined;
 }
 
@@ -65,7 +71,7 @@ function siteBounds(site: Site, scale: number): ThroneSiteBounds {
 }
 
 export function throneSiteBounds(
-  type: GameMapType,
+  type: GameMapId,
   size = GameMapSize.Normal,
 ): readonly ThroneSiteBounds[] {
   return (sites[type] ?? []).map((site) =>
@@ -77,7 +83,7 @@ const components = new WeakMap<GameMap, Map<Site, ReadonlyTileSet>>();
 
 export function isThronePlacementTile(
   map: GameMap,
-  type: GameMapType,
+  type: GameMapId,
   tile: TileRef,
   size = GameMapSize.Normal,
 ): boolean {

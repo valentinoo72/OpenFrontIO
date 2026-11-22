@@ -9,6 +9,7 @@ import {
 import {
   GameConfigPatch,
   isValidGameID,
+  MAX_BOTS,
   TeamCountConfig,
 } from "@openfront/engine-api/Schemas";
 import { DoomsdayClockSpeed } from "@openfront/engine-lib/game/DoomsdayClock";
@@ -204,7 +205,10 @@ export class HostLobbyModal extends BaseModal {
     }
     if (this.kothLoadedFor !== this.lobbyId) {
       this.kothLoadedFor = this.lobbyId;
-      if (lobby.gameConfig?.kingOfTheHill) {
+      if (
+        lobby.gameConfig?.kingOfTheHill &&
+        isKingOfTheHillMap(lobby.gameConfig.gameMap)
+      ) {
         this.kingOfTheHill = true;
         this.selectedMap = lobby.gameConfig.gameMap;
         this.gameMode = lobby.gameConfig.gameMode;
@@ -1039,6 +1043,7 @@ export class HostLobbyModal extends BaseModal {
             } as JoinLobbyEvent,
             bubbles: true,
             composed: true,
+            cancelable: true,
           }),
         );
       })
@@ -1074,6 +1079,7 @@ export class HostLobbyModal extends BaseModal {
         } as JoinLobbyEvent,
         bubbles: true,
         composed: true,
+        cancelable: true,
       }),
     );
   }
@@ -1366,7 +1372,7 @@ export class HostLobbyModal extends BaseModal {
   private handleBotsChange = (e: Event) => {
     const customEvent = e as CustomEvent<{ value: number }>;
     const value = customEvent.detail.value;
-    if (isNaN(value) || value < 0 || value > 400) {
+    if (isNaN(value) || value < 0 || value > MAX_BOTS) {
       return;
     }
 

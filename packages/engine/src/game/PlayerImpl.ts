@@ -200,6 +200,7 @@ export class PlayerImpl implements Player {
   private _spawnTile: TileRef | undefined;
   private _isDisconnected = false;
   private _disconnectSnapshot: DisconnectSnapshot | null = null;
+  private _playable = false;
 
   /**
    * Last PlayerUpdate emitted for this player on the worker→main channel.
@@ -417,6 +418,7 @@ export class PlayerImpl implements Player {
       betrayals: this._betrayalCount,
       lastDeleteUnitTick: this.lastDeleteUnitTick,
       isLobbyCreator: this.isLobbyCreator(),
+      playable: this._playable,
     };
   }
 
@@ -736,6 +738,14 @@ export class PlayerImpl implements Player {
 
   isLobbyCreator(): boolean {
     return this.playerInfo.isLobbyCreator;
+  }
+
+  playable(): boolean {
+    return this._playable;
+  }
+
+  setPlayable(playable: boolean): void {
+    this._playable = playable;
   }
 
   isAlive(): boolean {
@@ -1344,6 +1354,10 @@ export class PlayerImpl implements Player {
 
   goldEarned(): Gold {
     return this._goldEarned;
+  }
+
+  setGold(gold: Gold): void {
+    this._gold = gold;
   }
 
   addGold(toAdd: Gold, tile?: TileRef): void {
@@ -2061,6 +2075,7 @@ export class PlayerImpl implements Player {
       disconnectSnapshot: this._disconnectSnapshot
         ? { ...this._disconnectSnapshot }
         : null,
+      playable: this._playable,
       // Never assigned until the first PlayerExecution tick; keep that apart
       // from an explicit null.
       largestClusterBoundingBox: box
@@ -2138,6 +2153,7 @@ export class PlayerImpl implements Player {
     this._disconnectSnapshot = s.disconnectSnapshot
       ? { ...s.disconnectSnapshot }
       : null;
+    this._playable = s.playable;
     this.lastSentUpdate = undefined;
     const box = s.largestClusterBoundingBox;
     this.largestClusterBoundingBox = box
@@ -2153,7 +2169,11 @@ export class PlayerImpl implements Player {
 
 export const PlayerSnapshot = snapshotType({
   name: "Player",
-  version: 1,
+  version: 2,
+  migrations: {
+    // v1 had no scenario nations, so none was playable.
+    1: (d) => ({ ...d, playable: false }),
+  },
   schema: z.object({
     smallID: zInt(),
     info: PlayerInfoSchema,
@@ -2212,6 +2232,7 @@ export const PlayerSnapshot = snapshotType({
         wasAlive: z.boolean(),
       })
       .nullable(),
+    playable: z.boolean(),
     largestClusterBoundingBox: z
       .object({ minX: zInt(), minY: zInt(), maxX: zInt(), maxY: zInt() })
       .nullable()

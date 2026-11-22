@@ -289,6 +289,8 @@ export interface PlayerUpdate {
   betrayals?: number;
   lastDeleteUnitTick?: Tick;
   isLobbyCreator?: boolean;
+  /** Scenario nations: a human may be assigned this one. */
+  playable?: boolean;
 }
 
 export interface AllianceView {
