@@ -15,6 +15,10 @@ vi.mock("../../src/server/MapLandTiles", () => ({
   getMapLandTiles: async () => 1_000_000,
 }));
 type Internals = {
+  playlists: {
+    specialFfa: GameMapType[];
+    specialTeam: GameMapType[];
+  };
   getSpecialConfig(trusted: boolean, koth?: boolean): Promise<GameConfig>;
   getRandomSpecialGameModifiers(
     excluded?: string[],
@@ -80,6 +84,7 @@ describe("KOTH public rotation", () => {
   it("selects KOTH as a mode and rerolls all three modifier slots normally", async () => {
     const p = new MapPlaylist();
     const engine = internal(p);
+    engine.playlists.specialFfa = [GameMapType.Luna, GameMapType.Surrounded];
     const picker = vi
       .spyOn(engine, "getRandomSpecialGameModifiers")
       .mockReturnValueOnce({ isKingOfTheHill: true })
@@ -102,6 +107,24 @@ describe("KOTH public rotation", () => {
       3,
     );
     expect(picker).toHaveBeenCalledTimes(2);
+    expect((await p.gameConfig("special")).gameMap).toBe(GameMapType.Luna);
+  });
+
+  it("advances the ordinary Special queue once per overlapping team lobby", async () => {
+    const p = new MapPlaylist();
+    const engine = internal(p);
+    const maps = [GameMapType.Luna, GameMapType.Surrounded];
+    engine.playlists.specialTeam = [...maps];
+    vi.spyOn(Math, "random").mockReturnValue(0.8);
+    vi.spyOn(engine, "getRandomSpecialGameModifiers").mockReturnValue({});
+
+    const configs = await Promise.all([
+      p.gameConfig("special"),
+      p.gameConfig("special"),
+    ]);
+
+    expect(configs.map((config) => config.gameMap)).toEqual(maps);
+    expect(engine.playlists.specialTeam).toEqual([]);
   });
 
   it.each([0.1, 0.4, 0.8])(

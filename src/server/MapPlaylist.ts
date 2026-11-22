@@ -186,7 +186,7 @@ export class MapPlaylist {
     }
 
     const mode = type === "ffa" ? GameMode.FFA : GameMode.Team;
-    const map = this.getNextMap(type);
+    const map = this.getPlaylist(type).shift()!;
 
     let playerTeams =
       mode === GameMode.Team ? this.getTeamCount(map) : undefined;
@@ -249,11 +249,12 @@ export class MapPlaylist {
   private async getSpecialConfig(
     trusted: boolean,
     kingOfTheHill = false,
+    mode = Math.random() < 0.5 ? GameMode.FFA : GameMode.Team,
   ): Promise<GameConfig> {
-    const mode = Math.random() < 0.5 ? GameMode.FFA : GameMode.Team;
-    const map = kingOfTheHill
-      ? rollKingOfTheHillMap(Math.random())
-      : this.getNextMap("special", mode);
+    const playlist = kingOfTheHill
+      ? undefined
+      : this.getPlaylist("special", mode);
+    const map = playlist ? playlist[0] : rollKingOfTheHillMap(Math.random());
     let playerTeams =
       mode === GameMode.Team
         ? this.getTeamCount(map, kingOfTheHill)
@@ -483,6 +484,18 @@ export class MapPlaylist {
     // 4min peace = 240s = 2400 ticks
     const peaceTimeDuration = isPeaceTime ? 240 * 10 : undefined;
 
+    // Only take a map from the ordinary queue when that lobby is ready.
+    if (playlist) {
+      // Overlapping rolls or weight changes can move the queue during a lookup.
+      if (
+        playlist !== this.playlists[this.playlistKey("special", mode)] ||
+        playlist[0] !== map
+      ) {
+        return this.getSpecialConfig(trusted, false, mode);
+      }
+      playlist.shift();
+    }
+
     return {
       donateGold: mode === GameMode.Team,
       donateTroops: mode === GameMode.Team,
@@ -647,10 +660,10 @@ export class MapPlaylist {
     } satisfies GameConfig;
   }
 
-  private getNextMap(
+  private getPlaylist(
     type: ScheduledPublicGameType,
     mode?: GameMode,
-  ): GameMapType {
+  ): GameMapType[] {
     const key = this.playlistKey(type, mode);
     const playlist = this.playlists[key];
     if (playlist.length === 0) {
@@ -661,7 +674,7 @@ export class MapPlaylist {
       log.warn(`Map weights empty the ${key} playlist, ignoring them`);
       playlist.push(...this.generateNewPlaylist(type, {}));
     }
-    return playlist.shift()!;
+    return playlist;
   }
 
   private playlistKey(
