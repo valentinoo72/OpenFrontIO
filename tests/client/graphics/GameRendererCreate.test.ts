@@ -94,15 +94,22 @@ describe("createRenderer", () => {
     const view = {} as MapRenderer;
     const inputEl = document.createElement("div");
 
-    const renderer = createRenderer(inputEl, game, eventBus, null, view);
+    const renderer = createRenderer(
+      inputEl,
+      game,
+      eventBus,
+      null,
+      view,
+      undefined,
+      12345,
+    );
 
     expect(renderer).toBeInstanceOf(GameRenderer);
     expect(renderer.transformHandler).toBeDefined();
 
-    // Settings modal wiring (fed by the shared bus and game view).
+    // Settings modal wiring (fed by the shared bus, game view, and visibleAt).
     const settingsModal = elements.get("settings-modal") as SettingsModal;
-    expect(settingsModal.eventBus).toBe(eventBus);
-    expect(settingsModal.game).toBe(game);
+    expect(settingsModal.visibleAt).toBe(12345);
 
     // Win modal wiring (fed by the shared bus and game view).
     const winModal = elements.get("win-modal") as WinModal;

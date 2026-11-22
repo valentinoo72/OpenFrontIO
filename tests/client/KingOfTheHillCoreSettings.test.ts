@@ -143,12 +143,11 @@ it("does not expose KOTH in Solo or save it in Solo presets", () => {
   expect(solo.exportPresetConfig()).not.toHaveProperty("kingOfTheHill");
 });
 
-it.each([true, false])(
-  "uses the v36 blue modifier section in the in-game menu (koth=%s)",
-  (koth) => {
+it("uses the standard in-game menu with King of the Hill enabled", () => {
+  const renderMenu = (kingOfTheHill: boolean) => {
     const menu = new SettingsModal() as any;
     menu.gameConfig = {
-      kingOfTheHill: koth,
+      kingOfTheHill,
       gameMap: GameMapType.Tourney4,
       gameMapSize: GameMapSize.Compact,
       gameMode: GameMode.FFA,
@@ -166,12 +165,10 @@ it.each([true, false])(
     menu.isVisible = true;
     const target = document.createElement("div");
     renderTemplate(menu.render(), target);
-    expect(target.querySelector("[data-header-badges]")).toBeNull();
-    expect(target.querySelector("[data-game-modifiers]")).not.toBeNull();
-    const tags = target.querySelectorAll("[data-modifier-tags] span");
-    expect(tags.length).toBeGreaterThan(0);
-    expect(
-      [...tags].every((tag) => tag.classList.contains("bg-malibu-blue")),
-    ).toBe(true);
-  },
-);
+    return target;
+  };
+  const standard = renderMenu(false);
+  expect(standard.querySelector("[data-header-badges]")).not.toBeNull();
+  expect(standard.querySelector("[data-game-modifiers]")).not.toBeNull();
+  expect(renderMenu(true).innerHTML).toBe(standard.innerHTML);
+});
