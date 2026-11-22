@@ -37,6 +37,8 @@ import type { RenderSettings } from "./RenderSettings";
 
 export class MapRenderer {
   private renderer: GPURenderer | null = null;
+  private throneZones: readonly TerrainRect[] = [];
+  private throneZoneVisible = false;
   private resizeObs: ResizeObserver | null = null;
   // Stored layer data for context-restore re-creation.
   private storedLayers: MapLayer[] = [];
@@ -99,6 +101,10 @@ export class MapRenderer {
       this.caf,
     );
 
+    if (this.throneZones.length > 0) {
+      this.renderer.setThroneZones(this.throneZones);
+      this.renderer.setThroneZoneVisible(this.throneZoneVisible);
+    }
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width > 0) this.renderer.resize(rect.width, rect.height);
   };
@@ -394,6 +400,15 @@ export class MapRenderer {
   setLocalRailColor(r: number, g: number, b: number): void {
     this.renderer?.setLocalRailColor(r, g, b);
   }
+  setThroneZones(rects: readonly TerrainRect[]): void {
+    this.throneZones = rects;
+    this.renderer?.setThroneZones(rects);
+  }
+  setThroneZoneVisible(visible: boolean): void {
+    this.throneZoneVisible = visible;
+    this.renderer?.setThroneZoneVisible(visible);
+  }
+
   setAltView(active: boolean): void {
     this.renderer?.setAltView(active);
   }

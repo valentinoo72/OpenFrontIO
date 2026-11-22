@@ -54,6 +54,21 @@ describe("UnitView accessors", () => {
     expect(u.createdAt()).toBe(0); // GameView.ticks() returns 0 before any update
   });
 
+  it("keeps a throne's original countdown when joining late or capturing it", () => {
+    const game = makeGameView();
+    const update = makeUnitUpdate({
+      unitType: UnitType.Throne,
+      underConstruction: true,
+      constructionEndsAt: 700,
+    });
+    const throne = new UnitView(game, update);
+    expect(throne.state.constructionStartTick).toBe(400);
+    throne.update({ ...update, ownerID: 2 });
+    expect(throne.state.constructionStartTick).toBe(400);
+    throne.update({ ...update, underConstruction: false });
+    expect(throne.state.constructionStartTick).toBeNull();
+  });
+
   it("returns the latest data after update()", () => {
     const game = makeGameView();
     const u = new UnitView(game, makeUnitUpdate({ troops: 100, pos: 1 }));

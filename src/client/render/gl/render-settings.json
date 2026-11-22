@@ -132,6 +132,10 @@
         "scale": 1,
         "iconFill": 0.85
       },
+      "Throne": {
+        "scale": 1.2434186656,
+        "iconFill": 0.7828932339
+      },
       "Port": {
         "scale": 1.08,
         "iconFill": 0.85
@@ -363,6 +367,10 @@
     "bucketCount": 9
   },
   "lightConfigs": {
+    "Throne": {
+      "radius": 18,
+      "intensity": 1.2
+    },
     "City": {
       "radius": 18,
       "intensity": 1.2

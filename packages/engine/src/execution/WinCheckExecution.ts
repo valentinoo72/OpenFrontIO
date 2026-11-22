@@ -33,6 +33,29 @@ export class WinCheckExecution implements Execution {
     }
     if (this.mg === null) throw new Error("Not initialized");
 
+    if (this.mg.config().isKingOfTheHill()) {
+      // Public KOTH has no automatic land/time winner. An explicit host time
+      // limit can end it without a winner, using the ordinary loss screen.
+      const limit = this.mg.config().gameConfig().maxTimerValue;
+      if (this.mg.getWinner() !== null) {
+        this.active = false;
+        return;
+      }
+      if (limit && this.mg.elapsedGameSeconds() >= limit * 60) {
+        this.mg.setWinner(null, this.mg.stats().stats());
+        this.active = false;
+        return;
+      }
+      // Only an explicit host Overtime setting enables the normal land
+      // threshold once overtime begins. Automatic KOTH never rolls Overtime.
+      const overtime = this.mg.config().overtimeConfig();
+      if (
+        !overtime.enabled ||
+        this.mg.elapsedGameSeconds() < overtime.startMinutes * 60
+      )
+        return;
+    }
+
     if (this.checkRankedTeamCancelled()) {
       return;
     }

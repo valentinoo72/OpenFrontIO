@@ -2,12 +2,17 @@ import type { Config } from "@openfront/engine-lib/configuration/Config";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MapRenderer } from "../../src/client/render/gl/MapRenderer";
 import type { RenderSettings } from "../../src/client/render/gl/RenderSettings";
-import type { RendererConfig } from "../../src/client/render/types";
+import type {
+  RendererConfig,
+  TerrainRect,
+} from "../../src/client/render/types";
 
 const stub = vi.hoisted(() => ({
   constructed: 0,
   disposeArgs: [] as Array<{ releaseContext?: boolean } | undefined>,
   failConstruct: false,
+  throneVisibility: [] as boolean[],
+  throneUploads: [] as Array<readonly TerrainRect[]>,
 }));
 
 vi.mock("../../src/client/render/gl/Renderer", () => ({
@@ -20,6 +25,12 @@ vi.mock("../../src/client/render/gl/Renderer", () => ({
       stub.disposeArgs.push(opts);
     }
     resize() {}
+    setThroneZones(data: readonly TerrainRect[]) {
+      stub.throneUploads.push(data);
+    }
+    setThroneZoneVisible(visible: boolean) {
+      stub.throneVisibility.push(visible);
+    }
     setMapLayers() {}
     setLayerVisible() {}
     setLayerAlpha() {}
@@ -51,6 +62,8 @@ describe("MapRenderer context loss", () => {
     stub.constructed = 0;
     stub.disposeArgs = [];
     stub.failConstruct = false;
+    stub.throneUploads = [];
+    stub.throneVisibility = [];
   });
 
   // A GPU-process crash is a recoverable loss, but only while the page leaves
@@ -104,6 +117,17 @@ describe("MapRenderer context loss", () => {
       canvas.dispatchEvent(new Event("webglcontextrestored")),
     ).not.toThrow();
     expect(reupload).not.toHaveBeenCalled();
+    view.dispose();
+  });
+  it("restores the KOTH island highlight after losing the graphics context", () => {
+    const { view, canvas } = makeRenderer();
+    const segments = [{ x: 10, y: 20, w: 3, h: 1 }];
+    view.setThroneZones(segments);
+    view.setThroneZoneVisible(true);
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
+    expect(stub.throneUploads).toEqual([segments, segments]);
+    expect(stub.throneVisibility).toEqual([true, true]);
     view.dispose();
   });
 });

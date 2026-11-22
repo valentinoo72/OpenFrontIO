@@ -89,6 +89,9 @@ function presetTeamsLabel(
  * split shows only the team count.
  */
 export function getGameModeLabel(gameConfig: GameConfig): string {
+  if (gameConfig.kingOfTheHill) {
+    return `${translateText("king_of_the_hill.name")} · ${getGameModeLabel({ ...gameConfig, kingOfTheHill: false })}`;
+  }
   const { gameMode, gameType, nations, playerTeams, maxPlayers } = gameConfig;
 
   if (gameMode !== GameMode.Team) {

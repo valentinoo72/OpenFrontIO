@@ -9,6 +9,7 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { UnitUpdate } from "@openfront/engine-api/game/GameUpdates";
 import { UnitLike } from "@openfront/engine-api/game/ReadViews";
+import { THRONE_BUILD_TICKS } from "@openfront/engine-lib/game/KingOfTheHill";
 import type { UnitState } from "../render/types";
 import { TrainType as RendererTrainType } from "../render/types";
 import { applyUnitUpdateInPlace, unitStateFromUpdate } from "./EntityState";
@@ -50,7 +51,10 @@ export class UnitView implements UnitLike {
     this.lastPos.push(data.pos);
     this._createdAt = this.gameView.ticks();
     if (this.state.underConstruction) {
-      this.state.constructionStartTick = this._createdAt;
+      this.state.constructionStartTick =
+        data.constructionEndsAt === undefined
+          ? this._createdAt
+          : data.constructionEndsAt - THRONE_BUILD_TICKS;
     }
   }
 
@@ -82,7 +86,10 @@ export class UnitView implements UnitLike {
     this._transportShipState = data.transportShipState;
     this._nukeState = data.nukeState;
     // constructionStartTick: set on transition into underConstruction.
-    if (this.state.underConstruction && !wasUnderConstruction) {
+    if (this.state.underConstruction && data.constructionEndsAt !== undefined) {
+      this.state.constructionStartTick =
+        data.constructionEndsAt - THRONE_BUILD_TICKS;
+    } else if (this.state.underConstruction && !wasUnderConstruction) {
       this.state.constructionStartTick = this.gameView.ticks();
     } else if (!this.state.underConstruction) {
       this.state.constructionStartTick = null;

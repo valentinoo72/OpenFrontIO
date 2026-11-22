@@ -22,6 +22,7 @@ import {
   UT_MISSILE_SILO,
   UT_PORT,
   UT_SAM_LAUNCHER,
+  UT_THRONE,
 } from "../../types";
 import { DynamicInstanceBuffer } from "../DynamicBuffer";
 import type { RenderSettings } from "../RenderSettings";
@@ -53,6 +54,7 @@ const STRUCTURE_ORDER = [
   UT_DEFENSE_POST,
   UT_SAM_LAUNCHER,
   UT_MISSILE_SILO,
+  UT_THRONE,
 ] as const;
 
 const ATLAS_COLS = STRUCTURE_ORDER.length;
@@ -115,7 +117,7 @@ export class StructurePass {
 
   private instanceCount = 0;
 
-  /** unitType string → atlas column index (0–5) */
+  /** unitType string → atlas column index */
   private typeToAtlasCol = new Map<string, number>();
   private mapW: number;
 
@@ -400,7 +402,12 @@ export class StructurePass {
       this.uAltView,
       this.altView && this.settings.altView.recolorStructures ? 1 : 0,
     );
-    gl.uniform1i(this.uHighlightMask, this.highlightMask);
+    // Automatic throne placement does not select a build-bar button. Give it
+    // the same outline and dimming as an explicitly selected structure.
+    const highlightMask =
+      this.highlightMask ||
+      (this.ghost?.ghostType === UT_THRONE ? 1 << (ATLAS_COLS - 1) : 0);
+    gl.uniform1i(this.uHighlightMask, highlightMask);
     gl.uniform1f(this.uHighlightOutlineW, ss.highlightOutlineWidth);
     gl.uniform1f(this.uHighlightDimAlpha, ss.highlightDimAlpha);
     gl.uniform1f(this.uFillDarken, ss.fillDarken);

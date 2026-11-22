@@ -10,6 +10,7 @@ import { PlayerLike } from "@openfront/engine-api/game/ReadViews";
 import { GameConfig } from "@openfront/engine-api/Schemas";
 import { pow } from "../DetMath";
 import { DoomsdayClockSpeed } from "../game/DoomsdayClock";
+import { isKingOfTheHillMap, THRONE_BUILD_TICKS } from "../game/KingOfTheHill";
 import { assertNever } from "../Util";
 
 export interface NukeMagnitude {
@@ -145,7 +146,13 @@ export class Config {
   }
   spawnImmunityDuration(): Tick {
     return (
-      this._gameConfig.spawnImmunityDuration ?? DEFAULT_SPAWN_IMMUNITY_TICKS
+      this._gameConfig.spawnImmunityDuration ??
+      (this.isKingOfTheHill() &&
+      (this._gameConfig.startingGold ?? 0) >= 5_000_000
+        ? this._gameConfig.startingGold! >= 25_000_000
+          ? 150 * 10
+          : SAM_CONSTRUCTION_TICKS + 15 * 10
+        : DEFAULT_SPAWN_IMMUNITY_TICKS)
     );
   }
   nationSpawnImmunityDuration(): Tick {
@@ -177,6 +184,7 @@ export class Config {
   }
 
   isUnitDisabled(unitType: UnitType): boolean {
+    if (unitType === UnitType.Throne) return !this.isKingOfTheHill();
     return this._gameConfig.disabledUnits?.includes(unitType) ?? false;
   }
   instantBuild(): boolean {
@@ -192,6 +200,14 @@ export class Config {
   }
   isRandomSpawn(): boolean {
     return this._gameConfig.randomSpawn;
+  }
+  isKingOfTheHill(): boolean {
+    const config = this._gameConfig;
+    return (
+      config.kingOfTheHill === true &&
+      config.gameType !== GameType.Singleplayer &&
+      isKingOfTheHillMap(config.gameMap)
+    );
   }
   infiniteTroops(): boolean {
     return this._gameConfig.infiniteTroops;
@@ -246,6 +262,9 @@ export class Config {
           constructionDuration: this.instantBuild() ? 0 : 2 * 10,
           upgradable: true,
         };
+        break;
+      case UnitType.Throne:
+        info = { constructionDuration: THRONE_BUILD_TICKS };
         break;
       case UnitType.TransportShip:
       case UnitType.SAMMissile:

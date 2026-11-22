@@ -19,6 +19,7 @@ import type { UserSettingModal } from "../../UserSettingModal";
 import {
   disabledUnitsBox,
   FLAT_SETTING_TAG,
+  LOBBY_SETTING_TAG,
   formatGameType,
   formatGameVisibility,
   hostCheatsBox,
@@ -328,7 +329,7 @@ export class SettingsModal extends LitElement implements Controller {
 
   private renderHeaderBadges() {
     const c = this.gameConfig ?? this.game?.config().gameConfig() ?? null;
-    if (c === null) return null;
+    if (c === null || c.kingOfTheHill) return null;
     const visibleAt = this.visibleAt;
     return html`
       <div
@@ -356,14 +357,19 @@ export class SettingsModal extends LitElement implements Controller {
         isSplitView: false,
       };
     }
-    const settings = notableLobbySettings(c, this.mapNationCount);
+    const settings = notableLobbySettings(c, this.mapNationCount).filter(
+      (setting) =>
+        !c.kingOfTheHill ||
+        setting.label !== translateText("game_settings.nations"),
+    );
     const hasDisabledUnits = (c.disabledUnits?.length ?? 0) > 0;
     const cheats = hostCheatsList(c);
     const hasHostCheats = cheats.length > 0;
     const hasModifiers =
       settings.length > 0 || hasDisabledUnits || hasHostCheats;
     const isSplitView =
-      hasDisabledUnits || hasHostCheats || settings.length >= 5;
+      !c.kingOfTheHill &&
+      (hasDisabledUnits || hasHostCheats || settings.length >= 5);
     return {
       c,
       settings,
@@ -494,7 +500,8 @@ export class SettingsModal extends LitElement implements Controller {
                 >
                   ${settings.map(
                     (s) =>
-                      html`<span class=${FLAT_SETTING_TAG}
+                      html`<span
+                        class=${c.kingOfTheHill ? `${LOBBY_SETTING_TAG} uppercase` : FLAT_SETTING_TAG}
                         >${lobbySettingTagText(s)}</span
                       >`,
                   )}

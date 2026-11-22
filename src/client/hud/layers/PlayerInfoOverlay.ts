@@ -10,7 +10,7 @@ import { UnitLike } from "@openfront/engine-api/game/ReadViews";
 import { renderNumber, renderTroops } from "@openfront/engine-lib/Format";
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
-import { html, LitElement, TemplateResult } from "lit";
+import { html, LitElement, nothing, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { Controller } from "../../Controller";
 import {
@@ -886,7 +886,11 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
         <div class="font-bold mb-1 ${isAlly ? "text-green-500" : "text-white"}">
           ${unit.owner().displayName()}
         </div>
-        <div class="mt-1">
+        <div
+          class="mt-1 ${
+            this.game.config().isKingOfTheHill() ? "flex flex-wrap gap-x-3" : ""
+          }"
+        >
           <div class="text-sm opacity-80">${unit.type()}</div>
           ${
             unit.hasHealth()
@@ -916,13 +920,17 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
     const containerClasses = this._isInfoVisible
       ? "opacity-100 visible pointer-events-auto"
       : "opacity-0 invisible pointer-events-none";
+    const barOffset = this.barOffset;
+    const koth = this.game.config().isKingOfTheHill();
 
     // From lg it sits in the top HUD row (index.html), which shifts or narrows
     // it to clear the open leaderboard.
     return html`
       <div
+        data-player-info-hud
+        data-visible=${this._isInfoVisible && this._isActive}
         class="max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:right-0 sm:max-lg:left-1/2 sm:max-lg:right-auto sm:max-lg:-translate-x-1/2 max-lg:z-[1001]"
-        style="margin-top: calc(${this.barOffset}px + var(--game-health-offset, 0px));"
+        style="margin-top: calc(${barOffset}px + var(--game-health-offset, 0px));"
         @click=${() => this.hide()}
         @contextmenu=${(e: MouseEvent) => e.preventDefault()}
       >
@@ -930,6 +938,11 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
           class="bg-gray-800/92 backdrop-blur-sm shadow-xs min-[1200px]:rounded-lg sm:rounded-b-lg shadow-lg text-white text-lg lg:text-base w-full ${
             this.showShortcutButtons() ? "sm:w-[598px]" : "sm:w-[500px]"
           } lg:max-w-full overflow-hidden ${containerClasses}"
+          style=${
+            koth
+              ? `height: calc(var(--koth-player-info-bottom) - ${barOffset}px); align-content: safe center; overflow-y: auto;`
+              : nothing
+          }
           @mouseenter=${this.onPanelEnter}
           @mouseleave=${this.onPanelLeave}
         >

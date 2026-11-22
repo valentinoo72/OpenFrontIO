@@ -1,6 +1,7 @@
 import { GameMode } from "@openfront/engine-api/game/GameTypes";
 import { GameConfig, GameConfigPatch } from "@openfront/engine-api/Schemas";
 import { adjustForTeams } from "@openfront/engine-lib/game/TeamAssignment";
+import { constrainKingOfTheHillConfig } from "./KingOfTheHillConfig";
 
 // The host edits its lobby through update_game_config, which carries a
 // partial GameConfig. Only the keys listed here are taken from it. gameType
@@ -13,6 +14,7 @@ import { adjustForTeams } from "@openfront/engine-lib/game/TeamAssignment";
 // Copied whenever the patch carries them.
 const COPIED_KEYS = [
   "gameMap",
+  "kingOfTheHill",
   "gameMapSize",
   "difficulty",
   "nations",
@@ -108,6 +110,7 @@ export function applyGameConfigPatch(
   // (the full config it sends has hostCheats: undefined when the toggle is
   // off), so `undefined` here means "clear", not "leave unchanged".
   target.hostCheats = patch.hostCheats;
+  constrainKingOfTheHillConfig(target);
 }
 
 // Whether the host-only cheat block actually grants anything: mere presence

@@ -126,6 +126,7 @@ describe("HeadsUpMessage spawn message", () => {
       isReplay: () => false,
       isIntentionalSpectator: () => false,
       isRandomSpawn: () => false,
+      isKingOfTheHill: () => false,
       overtimeConfig: () => ({ enabled: false, startMinutes: 0 }),
       gameConfig: () => ({ tutorial }),
     }),

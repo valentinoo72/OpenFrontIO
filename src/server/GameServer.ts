@@ -75,6 +75,7 @@ import {
   IntentActor,
   IntentOutcome,
 } from "./IntentAuthorization";
+import { constrainKingOfTheHillConfig } from "./KingOfTheHillConfig";
 import { ListingState } from "./ListingState";
 import { friendsLookup, NameVisibility } from "./NameVisibility";
 import { poolTargetFor } from "./PoolRouting";
@@ -319,6 +320,7 @@ export class GameServer {
     this.id = opts.id;
     this.createdAt = opts.createdAt;
     this.gameConfig = opts.gameConfig;
+    constrainKingOfTheHillConfig(this.gameConfig);
     this.creatorPersistentID = opts.creatorPersistentID;
     this.startsAt = opts.startsAt;
     this.publicGameType = opts.publicGameType;

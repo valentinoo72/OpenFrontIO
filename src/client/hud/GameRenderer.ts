@@ -4,6 +4,7 @@ import { AmbienceController } from "../controllers/AmbienceController";
 import { AttackingTroopsController } from "../controllers/AttackingTroopsController";
 import { BuildPreviewController } from "../controllers/BuildPreviewController";
 import { HoverHighlightController } from "../controllers/HoverHighlightController";
+import { KingOfTheHillMapOverlay } from "../controllers/KingOfTheHillMapOverlay";
 import { LiveStatsController } from "../controllers/LiveStatsController";
 import { MapLayerController } from "../controllers/MapLayerController";
 import { SoundEffectController } from "../controllers/SoundEffectController";
@@ -62,6 +63,9 @@ export function createRenderer(
 ): GameRenderer {
   const transformHandler = new TransformHandler(game, eventBus, inputEl);
   const userSettings = new UserSettings();
+  const throneMap = game.config().isKingOfTheHill()
+    ? game.config().gameConfig().gameMap
+    : undefined;
 
   const uiState: UIState = {
     attackRatio: 20,
@@ -336,6 +340,9 @@ export function createRenderer(
   onboardingOverlay.uiState = uiState;
 
   const layers: Controller[] = [
+    ...(throneMap !== undefined
+      ? [new KingOfTheHillMapOverlay(game, view, eventBus)]
+      : []),
     new WarshipSelectionController(game, eventBus, transformHandler, view),
     new BuildPreviewController(
       game,
@@ -344,6 +351,8 @@ export function createRenderer(
       transformHandler,
       view,
       userSettings,
+      throneMap,
+      game.config().gameConfig().gameMapSize,
     ),
     new HoverHighlightController(game, eventBus, transformHandler, view),
     new LiveStatsController(game, eventBus),
@@ -427,6 +436,7 @@ export class GameRenderer {
   }
 
   dispose() {
+    for (const layer of this.layers) layer.dispose?.();
     window.removeEventListener("resize", this.onResize);
     this.canvasSizeObserver?.disconnect();
     this.canvasSizeObserver = null;

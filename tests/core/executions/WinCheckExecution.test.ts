@@ -34,6 +34,7 @@ describe("WinCheckExecution", () => {
 
   it("should call checkWinnerTeam in non-FFA mode", () => {
     mg.config = vi.fn(() => ({
+      isKingOfTheHill: () => false,
       gameConfig: vi.fn(() => ({
         maxTimerValue: 5,
         gameMode: GameMode.Team,

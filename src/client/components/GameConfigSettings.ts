@@ -22,7 +22,7 @@ import {
   svg,
 } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { translateText } from "../Utils";
+import { showToast, translateText } from "../Utils";
 import "./Difficulties";
 import "./DifficultyInfo";
 import "./FluentSlider";
@@ -186,13 +186,16 @@ export interface ToggleOptionConfig {
   labelKey: string;
   checked: boolean;
   hidden?: boolean;
+  disabledReason?: string;
   // When set, this toggle's card expands to a pace dropdown while it is checked.
   doomsdayClockSpeed?: DoomsdayClockSpeed;
 }
 
 export interface GameConfigSettingsData {
   map: {
+    titleKey?: string;
     selected: GameMapType;
+    allowedMaps?: readonly GameMapType[];
     useRandom: boolean;
     randomMapDivider?: boolean;
     showMedals?: boolean;
@@ -207,6 +210,7 @@ export interface GameConfigSettingsData {
   };
   teamCount: {
     selected: TeamCountConfig;
+    humansVsNationsDisabledReason?: string;
   };
   options: {
     titleKey: string;
@@ -218,6 +222,7 @@ export interface GameConfigSettingsData {
     nations?: {
       value: number;
       defaultValue?: number;
+      disabledReason?: string;
       labelKey: string;
       disabledKey: string;
       hidden?: boolean;
@@ -288,10 +293,22 @@ export class GameConfigSettings extends LitElement {
   };
 
   private handleTeamCountSelect = (count: TeamCountConfig) => {
+    const reason =
+      count === HumansVsNations
+        ? this.settings?.teamCount.humansVsNationsDisabledReason
+        : undefined;
+    if (reason) {
+      showToast(reason, "red");
+      return;
+    }
     this.emit("team-count-selected", { count });
   };
 
   private handleOptionToggle = (toggle: ToggleOptionConfig) => {
+    if (toggle.disabledReason) {
+      showToast(toggle.disabledReason, "red");
+      return;
+    }
     this.emit("option-toggle-changed", {
       labelKey: toggle.labelKey,
       checked: !toggle.checked,
@@ -321,6 +338,17 @@ export class GameConfigSettings extends LitElement {
 
   private renderOptionToggle(toggle: ToggleOptionConfig): TemplateResult {
     if (toggle.hidden) return html``;
+    if (toggle.disabledReason)
+      return html`<button
+        type="button"
+        aria-disabled="true"
+        class="${cardClass(false, "p-4 text-center opacity-30 cursor-not-allowed")}"
+        @click=${() => this.handleOptionToggle(toggle)}
+      >
+        <span class="${CARD_LABEL_CLASS} text-white/60"
+          >${translateText(toggle.labelKey)}</span
+        >
+      </button>`;
 
     if (toggle.doomsdayClockSpeed !== undefined) {
       return this.renderDoomsdayClockToggle(toggle);
@@ -442,9 +470,10 @@ export class GameConfigSettings extends LitElement {
           MAP_ICON,
           "text-aquarius",
           "bg-malibu-blue/20",
-          "map.map",
+          settings.map.titleKey ?? "map.map",
           html`<map-picker
             .selectedMap=${settings.map.selected}
+            .allowedMaps=${settings.map.allowedMaps}
             .useRandomMap=${settings.map.useRandom}
             .randomMapDivider=${settings.map.randomMapDivider ?? false}
             .showMedals=${settings.map.showMedals ?? false}
@@ -546,12 +575,16 @@ export class GameConfigSettings extends LitElement {
                   <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                     ${TEAM_COUNT_OPTIONS.map((o) => {
                       const isSelected = settings.teamCount.selected === o;
+                      const blocked =
+                        o === HumansVsNations &&
+                        settings.teamCount.humansVsNationsDisabledReason;
                       return html`
                         <button
                           class="${cardClass(
                             isSelected,
-                            "px-4 py-3 text-center",
+                            `px-4 py-3 text-center ${blocked ? "opacity-30 cursor-not-allowed" : ""}`,
                           )}"
+                          aria-disabled=${!!blocked}
                           @click=${() => this.handleTeamCountSelect(o)}
                         >
                           <span class="${CARD_LABEL_CLASS} text-white">
@@ -598,7 +631,12 @@ export class GameConfigSettings extends LitElement {
               ${
                 settings.options.nations && !settings.options.nations.hidden
                   ? html`<div
-                      class="col-span-2 rounded-xl p-4 flex flex-col justify-center border transition-all duration-200 ${
+                      aria-disabled=${!!settings.options.nations.disabledReason}
+                      @click=${() => {
+                        const reason = settings.options.nations?.disabledReason;
+                        if (reason) showToast(reason, "red");
+                      }}
+                      class="${settings.options.nations.disabledReason ? "opacity-30 cursor-not-allowed" : ""} col-span-2 rounded-xl p-4 flex flex-col justify-center border transition-all duration-200 ${
                         settings.options.nations.value > 0
                           ? ACTIVE_CARD
                           : INACTIVE_CARD
@@ -608,6 +646,8 @@ export class GameConfigSettings extends LitElement {
                         min="0"
                         max="400"
                         step="1"
+                        class=${settings.options.nations.disabledReason ? "pointer-events-none" : ""}
+                        ?inert=${!!settings.options.nations.disabledReason}
                         .value=${settings.options.nations.value}
                         .defaultValue=${settings.options.nations.defaultValue}
                         defaultLabelKey="common.map_default"

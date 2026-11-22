@@ -114,7 +114,7 @@ float sdPolygon(vec2 p, float R, float n, float rot) {
 }
 
 // Per-structure-type shape SDF.
-// Atlas indices: 0=City, 1=Port, 2=Factory, 3=DefensePost, 4=SAM, 5=Silo
+// Atlas indices: 0=City, 1=Port, 2=Factory, 3=DefensePost, 4=SAM, 5=Silo, 6=Throne
 float shapeSDF(vec2 p, float R) {
   if (vAtlasIdx < 0.5)
     return length(p) - R;                     // City → circle
@@ -126,7 +126,16 @@ float shapeSDF(vec2 p, float R) {
     return sdPolygon(p, R, 8.0, 0.0);         // Defense Post → octagon (flat top)
   if (vAtlasIdx < 4.5)
     return sdPolygon(p, R, 4.0, 0.0);         // SAM Launcher → square (flat sides)
-  return sdPolygon(p, R, 3.0, PI * 0.5);      // Missile Silo → triangle (vertex up)
+  if (vAtlasIdx < 5.5)
+    return sdPolygon(p, R, 3.0, PI * 0.5);    // Missile Silo → triangle (vertex up)
+
+  // Throne: cut a triangular roof into a rounded square.
+  const float corner = 0.07;
+  vec2 box = abs(p - vec2(0.0, 0.01)) - R * vec2(0.88, 0.92) + corner;
+  float body = length(max(box, 0.0)) + min(max(box.x, box.y), 0.0) - corner;
+  float roof = (0.73 * abs(p.x) - p.y - R * 0.95) * 0.808;
+  float join = max(0.045 - abs(body - roof), 0.0) / 0.045;
+  return max(body, roof) + 0.01125 * join * join;
 }
 
 void main() {

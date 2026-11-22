@@ -37,6 +37,7 @@ const atomBombIcon = assetUrl("images/NukeIconWhite.svg");
 const portIcon = assetUrl("images/PortIcon.svg");
 const samlauncherIcon = assetUrl("images/SamLauncherIconWhite.svg");
 const shieldIcon = assetUrl("images/ShieldIconWhite.svg");
+const throneIcon = assetUrl("images/ThroneIconWhite.svg");
 
 export interface BuildItemDisplay {
   unitType: PlayerBuildableUnitType;
@@ -116,6 +117,13 @@ const buildTable: BuildItemDisplay[][] = [
       icon: factoryIcon,
       description: "build_menu.desc.factory",
       key: "unit_type.factory",
+      countable: true,
+    },
+    {
+      unitType: UnitType.Throne,
+      icon: throneIcon,
+      description: "king_of_the_hill.build_description",
+      key: "unit_type.throne",
       countable: true,
     },
   ],
@@ -488,9 +496,12 @@ export class BuildMenu extends LitElement implements Controller {
   }
 
   private refresh() {
+    const units = this.game.config().isKingOfTheHill()
+      ? ([...BuildMenus.types, UnitType.Throne] as const)
+      : BuildMenus.types;
     const refresh = this.game
       .myPlayer()
-      ?.buildables(this.clickedTile, BuildMenus.types)
+      ?.buildables(this.clickedTile, units)
       .then((buildables) => {
         this.playerBuildables = buildables;
         this.requestUpdate();

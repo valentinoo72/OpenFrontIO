@@ -61,6 +61,7 @@ import { StructureLevelPass } from "./passes/StructureLevelPass";
 import { StructurePass } from "./passes/StructurePass";
 import { TerrainPass } from "./passes/TerrainPass";
 import { TerritoryPass } from "./passes/TerritoryPass";
+import { ThroneZonePass } from "./passes/ThroneZonePass";
 import { TrailPass } from "./passes/TrailPass";
 import { UnitPass } from "./passes/UnitPass";
 import { WorldTextPass } from "./passes/WorldTextPass";
@@ -148,6 +149,8 @@ export class GPURenderer {
   private affiliationPalette: AffiliationPalette;
   private coordinateGridPass: CoordinateGridPass;
   private spawnOverlayPass: SpawnOverlayPass;
+  private throneZonePass?: ThroneZonePass;
+  private throneZoneVisible = false;
   private smallPlayerGlowPass: SmallPlayerGlowPass;
   private inSpawnPhase = false;
 
@@ -1064,6 +1067,7 @@ export class GPURenderer {
     this.worldTextPass.setGhostCostLabel(
       data && (showCost || topText !== undefined)
         ? {
+            ghostType: data.ghostType,
             tileX: data.tileX,
             tileY: data.tileY,
             cost: showCost ? data.cost : 0,
@@ -1086,6 +1090,16 @@ export class GPURenderer {
 
   updateNukeTelegraphs(data: NukeTelegraphData[]): void {
     this.nukeTelegraphPass.update(data);
+  }
+
+  setThroneZones(rects: readonly TerrainRect[]): void {
+    if (!this.throneZonePass && rects.length > 0)
+      this.throneZonePass = new ThroneZonePass(this.gl);
+    this.throneZonePass?.update(rects);
+  }
+
+  setThroneZoneVisible(visible: boolean): void {
+    this.throneZoneVisible = visible;
   }
 
   updateSpawnOverlay(inSpawnPhase: boolean, centers: SpawnCenter[]): void {
@@ -1352,6 +1366,7 @@ export class GPURenderer {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
+    if (this.throneZoneVisible) this.throneZonePass?.draw(cam);
     this.spawnOverlayPass.draw(cam);
     if (pe.borderStamp) this.borderStampPass.draw(cam);
     if (pe.railroad) this.railroadPass.draw(cam, zoom);
@@ -1493,6 +1508,7 @@ export class GPURenderer {
     this.heatManager.dispose();
     this.affiliationPalette.dispose();
     this.coordinateGridPass.dispose();
+    this.throneZonePass?.dispose();
     this.spawnOverlayPass.dispose();
     this.smallPlayerGlowPass.dispose();
     this.railroadPass.dispose();

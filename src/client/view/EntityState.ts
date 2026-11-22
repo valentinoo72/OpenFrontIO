@@ -6,16 +6,19 @@
  * (src/client/replay/codec) can use them in a worker and get the same records as
  * the live client.
  */
+
 import {
   PlayerID,
   PlayerType,
   TrainType,
+  UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import {
   ATTACK_DELTA_OUTGOING,
   PlayerUpdate,
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
+import { THRONE_BUILD_TICKS } from "@openfront/engine-lib/game/KingOfTheHill";
 import {
   PlayerState,
   PlayerStatic,
@@ -69,7 +72,12 @@ export function unitStateFromUpdate(u: UnitUpdate): UnitState {
     hasTrainStation: u.hasTrainStation,
     trainType: trainTypeToNum(u.trainType),
     loaded: u.loaded ?? null,
-    constructionStartTick: null, // GameView fills in createdAt when underConstruction
+    constructionStartTick:
+      u.unitType === UnitType.Throne &&
+      u.underConstruction &&
+      u.constructionEndsAt !== undefined
+        ? u.constructionEndsAt - THRONE_BUILD_TICKS
+        : null,
     samUpgradeStartTick: u.samUpgrade?.upgradeStartTick ?? null,
     samUpgradeStartRange: u.samUpgrade?.startRange ?? null,
     samUpgradeTargetLevel: u.samUpgrade?.targetLevel ?? null,
@@ -79,6 +87,12 @@ export function unitStateFromUpdate(u: UnitUpdate): UnitState {
 
 /** Mutate `target` in place from a UnitUpdate, avoiding any allocation. */
 export function applyUnitUpdateInPlace(target: UnitState, u: UnitUpdate): void {
+  if (
+    u.unitType === UnitType.Throne &&
+    u.underConstruction &&
+    u.constructionEndsAt !== undefined
+  )
+    target.constructionStartTick = u.constructionEndsAt - THRONE_BUILD_TICKS;
   target.ownerID = u.ownerID;
   target.unitType = u.unitType;
   target.lastOwnerID = u.lastOwnerID ?? null;

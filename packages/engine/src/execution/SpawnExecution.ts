@@ -6,6 +6,7 @@ import {
   SpawnArea,
 } from "@openfront/engine-api/game/GameTypes";
 import { GameID } from "@openfront/engine-api/Schemas";
+import { isThronePlacementTile } from "@openfront/engine-lib/game/KingOfTheHill";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { zNum, zRandom } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { simpleHash } from "@openfront/engine-lib/Util";
@@ -82,9 +83,30 @@ export class SpawnExecution implements Execution {
     // choosing. init() still sees the phase for a last-tick pick but not for
     // anything sent afterwards, and runs identically on every client, so a
     // rejected intent is a deterministic no-op rather than a desync.
-    if (this.fromIntent && !this.queuedDuringSpawnPhase) {
+    const config = this.mg.config();
+    if (
+      this.fromIntent &&
+      (!this.queuedDuringSpawnPhase ||
+        (config.isKingOfTheHill() && config.isRandomSpawn()))
+    ) {
       return;
     }
+
+    const { gameMap, gameMapSize } = config.gameConfig();
+    const outsideSite =
+      player.type() === PlayerType.Human && config.isKingOfTheHill()
+        ? (tile: TileRef) =>
+            !isThronePlacementTile(this.mg, gameMap, tile, gameMapSize)
+        : undefined;
+    if (
+      this.fromIntent &&
+      outsideSite &&
+      (this.tile === undefined ||
+        !this.mg.isLand(this.tile) ||
+        this.mg.isImpassable(this.tile) ||
+        !outsideSite(this.tile))
+    )
+      return;
 
     // Security: If random spawn is enabled, prevent players from re-rolling their spawn location
     if (this.mg.config().isRandomSpawn() && player.hasSpawned()) {
@@ -95,6 +117,7 @@ export class SpawnExecution implements Execution {
     prevTiles.forEach((t) => player.relinquish(t));
     const spawn = this.getSpawn(
       this.mg.config().isRandomSpawn() ? undefined : this.tile,
+      outsideSite,
     );
 
     if (!spawn) {
@@ -104,7 +127,7 @@ export class SpawnExecution implements Execution {
     }
 
     spawn.tiles.forEach((t) => {
-      player.conquer(t);
+      if (!outsideSite || outsideSite(t)) player.conquer(t);
     });
 
     if (!player.hasSpawned()) {
@@ -135,7 +158,10 @@ export class SpawnExecution implements Execution {
     return true;
   }
 
-  private getSpawn(center?: TileRef): Spawn | undefined {
+  private getSpawn(
+    center?: TileRef,
+    outsideSite?: (tile: TileRef) => boolean,
+  ): Spawn | undefined {
     if (center !== undefined) {
       const tiles = getSpawnTiles(this.mg, center, false);
 
@@ -157,7 +183,8 @@ export class SpawnExecution implements Execution {
       if (
         !this.mg.isLand(center) ||
         this.mg.hasOwner(center) ||
-        this.mg.isBorder(center)
+        this.mg.isBorder(center) ||
+        (outsideSite !== undefined && !outsideSite(center))
       ) {
         continue;
       }

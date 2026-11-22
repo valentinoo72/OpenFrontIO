@@ -2,15 +2,28 @@ import {
   GameMode,
   GameType,
   RankedType,
+  UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
+import { THRONE_BUILD_TICKS } from "@openfront/engine-lib/game/KingOfTheHill";
 import { LitElement, html } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 import { Controller } from "../../Controller";
 import { translateText } from "../../Utils";
 import { GameView } from "../../view";
 
 const COLLUSION_WARNING_CLOSED_KEY = "hasClosedCollusionWarning";
+const OPENFRONT_MESSAGE_CLASSES =
+  "inline-flex items-center justify-center min-h-8 lg:min-h-10 w-fit max-w-[90vw] bg-gray-800/70 rounded-md lg:rounded-lg backdrop-blur-xs text-white text-md lg:text-xl px-3 lg:px-4 py-1 text-center break-words";
+
+type ThroneAlert = {
+  id: number;
+  end: number;
+  key: "own" | "teammate" | "enemy";
+};
+type KothGameNotice = "pregame" | "pause" | "immunity" | "overtime" | "spawn";
+type KothNoticeKey = number | "toast" | KothGameNotice;
 
 @customElement("heads-up-message")
 export class HeadsUpMessage extends LitElement implements Controller {
@@ -39,11 +52,15 @@ export class HeadsUpMessage extends LitElement implements Controller {
   private toastMessage: string | import("lit").TemplateResult | null = null;
   @state()
   private toastColor: "green" | "red" = "green";
+  private healthOffsetObserver?: MutationObserver;
   private toastTimeout: number | null = null;
   private toastPointerId: number | null = null;
   private toastDragStart = { x: 0, y: 0 };
   @state()
   private toastDragOffset = { x: 0, y: 0 };
+
+  private kothThroneAlerts: ThroneAlert[] = [];
+  private readonly kothNoticeOrder = new Set<KothNoticeKey>();
 
   private static readonly TOAST_DISMISS_DISTANCE = 80;
 
@@ -61,6 +78,7 @@ export class HeadsUpMessage extends LitElement implements Controller {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    this.healthOffsetObserver?.disconnect();
     window.removeEventListener(
       "show-message",
       this.handleShowMessage as EventListener,
@@ -78,6 +96,7 @@ export class HeadsUpMessage extends LitElement implements Controller {
     this.toastPointerId = null;
     this.toastDragOffset = { x: 0, y: 0 };
     this.toastMessage = null;
+    this.kothNoticeOrder.delete("toast");
   };
 
   private handleShowMessage = (event: CustomEvent) => {
@@ -86,6 +105,10 @@ export class HeadsUpMessage extends LitElement implements Controller {
       typeof message === "string" ||
       (message && typeof message.values === "object")
     ) {
+      if (this.game?.config().isKingOfTheHill()) {
+        if (message !== this.toastMessage) this.kothNoticeOrder.delete("toast");
+        if (message) this.kothNoticeOrder.add("toast");
+      }
       this.toastMessage = message;
       this.toastColor = color === "red" ? "red" : "green";
       this.toastPointerId = null;
@@ -137,8 +160,38 @@ export class HeadsUpMessage extends LitElement implements Controller {
   };
 
   init() {
+    this.healthOffsetObserver?.disconnect();
+    this.style.removeProperty("--game-health-offset");
+    this.kothNoticeOrder.clear();
+    if (this.game.config().isKingOfTheHill()) {
+      this.watchPlayerInfoHealthOffset();
+      if (this.toastMessage) this.kothNoticeOrder.add("toast");
+      this.tick();
+      return;
+    }
     this.isVisible = true;
     this.requestUpdate();
+  }
+
+  private watchPlayerInfoHealthOffset() {
+    const playerInfo = document.querySelector<HTMLElement>(
+      "player-info-overlay",
+    );
+    if (!playerInfo) return;
+
+    // The connection and performance indicators offset the top HUD panels.
+    // Keep that clearance while giving the hover panel a fixed height budget.
+    const sync = () => {
+      this.style.setProperty(
+        "--game-health-offset",
+        playerInfo.style.getPropertyValue("--game-health-offset"),
+      );
+    };
+    this.healthOffsetObserver = new MutationObserver(sync);
+    this.healthOffsetObserver.observe(playerInfo, {
+      attributeFilter: ["style"],
+    });
+    sync();
   }
 
   tick() {
@@ -148,13 +201,14 @@ export class HeadsUpMessage extends LitElement implements Controller {
       this.isPaused = pauseUpdates[pauseUpdates.length - 1].paused;
     }
 
+    const spawning = this.game.inSpawnPhase();
     const showImmunityHudDuration = 10 * 10;
     const spawnEnd = this.game.config().numSpawnPhaseTurns();
     const ticksSinceSpawnEnd = this.game.ticks() - spawnEnd;
 
     this.isImmunityActive =
       this.game.config().hasExtendedSpawnImmunity() &&
-      !this.game.inSpawnPhase() &&
+      !spawning &&
       this.game.isSpawnImmunityActive() &&
       ticksSinceSpawnEnd < showImmunityHudDuration;
 
@@ -167,17 +221,19 @@ export class HeadsUpMessage extends LitElement implements Controller {
     const elapsed = this.game.elapsedGameSeconds();
     this.isOvertimeNotice =
       overtime.enabled &&
-      !this.game.inSpawnPhase() &&
+      !spawning &&
       elapsed >= overtimeStart &&
       elapsed < overtimeStart + HeadsUpMessage.OVERTIME_NOTICE_SECONDS;
 
     // The onboarding tutorial's own card says where to spawn.
     this.isVisible =
-      (this.game.inSpawnPhase() &&
-        this.game.config().gameConfig().tutorial !== true) ||
+      (spawning && this.game.config().gameConfig().tutorial !== true) ||
       this.isPaused ||
       this.isImmunityActive ||
       this.isOvertimeNotice;
+    if (this.game.config().isKingOfTheHill()) {
+      this.updateKothNotices(spawning);
+    }
     this.requestUpdate();
   }
 
@@ -216,7 +272,204 @@ export class HeadsUpMessage extends LitElement implements Controller {
     this.requestUpdate();
   };
 
+  private getKothGameNotice(
+    spawning: boolean,
+    ended: boolean,
+  ): KothGameNotice | null {
+    if (spawning && !ended) return "pregame";
+    if (this.isPaused) return "pause";
+    if (this.isImmunityActive) return "immunity";
+    if (this.isOvertimeNotice) return "overtime";
+    return this.isVisible ? "spawn" : null;
+  }
+
+  private updateKothNotices(spawning: boolean) {
+    const ended = this.game.gameOver();
+    this.kothThroneAlerts = spawning || ended ? [] : this.closestThroneAlerts();
+    const active = new Set<KothNoticeKey>(
+      this.kothThroneAlerts.map(({ id }) => id),
+    );
+    if (this.toastMessage) active.add("toast");
+    const gameNotice = this.getKothGameNotice(spawning, ended);
+    if (gameNotice !== null) active.add(gameNotice);
+
+    // Keep each visible card in its arrival position as the countdowns tick.
+    for (const key of this.kothNoticeOrder) {
+      if (!active.has(key)) this.kothNoticeOrder.delete(key);
+    }
+    for (const key of active) this.kothNoticeOrder.add(key);
+  }
+
+  private closestThroneAlerts(): ThroneAlert[] {
+    const player = this.game.myPlayer();
+    const closest = new Map<"friendly" | "enemy", ThroneAlert>();
+    for (const throne of this.game.units(UnitType.Throne)) {
+      const start = throne.state.constructionStartTick;
+      if (!throne.isActive() || !throne.isUnderConstruction() || start === null)
+        continue;
+      const owner = throne.owner();
+      const key =
+        owner.smallID() === player?.smallID()
+          ? "own"
+          : this.game.config().gameConfig().gameMode === GameMode.Team &&
+              player?.isOnSameTeam(owner)
+            ? "teammate"
+            : "enemy";
+      const side = key === "enemy" ? "enemy" : "friendly";
+      const candidate: ThroneAlert = {
+        id: throne.id(),
+        end: start + THRONE_BUILD_TICKS,
+        key,
+      };
+      const current = closest.get(side);
+      if (
+        !current ||
+        candidate.end < current.end ||
+        (candidate.end === current.end && candidate.id < current.id)
+      )
+        closest.set(side, candidate);
+    }
+    return [...closest.values()].sort((a, b) => a.end - b.end || a.id - b.id);
+  }
+
+  private renderThroneAlert({ id, end, key }: ThroneAlert) {
+    const timer = translateText("king_of_the_hill.seconds", {
+      seconds: Math.max(0, Math.ceil((end - this.game.ticks()) / 10)),
+    });
+    const enemy = key === "enemy";
+    return html`<div
+      data-throne-alert=${key}
+      data-throne-id=${id}
+      class="w-fit min-w-0 max-w-full rounded-md border px-3 py-2 text-center font-sans text-sm wrap-anywhere leading-snug text-white lg:rounded-lg lg:text-base ${
+        enemy ? "border-red-500/30" : "border-green-500/30"
+      }"
+      style="background: color-mix(in srgb, var(--color-gray-800), var(${enemy ? "--color-red-500" : "--color-green-500"}) 25%);"
+    >
+      ${translateText(`king_of_the_hill.${key}_throne`)}
+      <span aria-hidden="true">·</span>
+      <strong class="tabular-nums">
+        ${translateText("king_of_the_hill.throne_win_timer", { timer })}
+      </strong>
+    </div>`;
+  }
+
+  private renderKothHud() {
+    // Leave room for the player card and both timer bars, even before hover.
+    return html`<div
+      data-heads-up-stack
+      class="pointer-events-none fixed left-1/2 z-[1002] flex w-[90vw] -translate-x-1/2 flex-col items-center"
+      style="top: calc(var(--koth-player-info-bottom) + var(--koth-hud-gap) + var(--game-health-offset, 0px)); gap: var(--koth-hud-gap);"
+    >
+      ${repeat(
+        this.kothNoticeOrder,
+        (key) => key,
+        (key) => {
+          if (key === "toast") return this.renderKothToast();
+          if (typeof key === "string") {
+            return this.renderKothOpenFrontMessages(key === "pregame");
+          }
+          const alert = this.kothThroneAlerts.find(({ id }) => id === key);
+          return alert ? this.renderThroneAlert(alert) : null;
+        },
+      )}
+    </div>`;
+  }
+
+  private renderKothToast() {
+    return html`<div
+      data-game-toast
+      data-game-input-pass-through
+      class="pointer-events-auto max-w-full touch-none select-none cursor-grab active:cursor-grabbing"
+      @pointerdown=${this.onToastPointerDown}
+      @pointermove=${this.onToastPointerMove}
+      @pointerup=${this.onToastPointerUp}
+      @pointercancel=${this.onToastPointerCancel}
+      @contextmenu=${(e: MouseEvent) => e.preventDefault()}
+    >
+      <div
+        data-game-toast-content
+        class="rounded-md border px-3 py-2 text-center font-sans text-sm font-medium tabular-nums wrap-anywhere leading-snug text-white lg:text-base"
+        style="background: #1e293b; backdrop-filter: none; border-color: ${this.toastColor === "red" ? "rgba(239,68,68,0.5)" : "rgba(34,197,94,0.5)"};
+          transform: translate3d(${this.toastDragOffset.x}px, ${Math.max(0, this.toastDragOffset.y)}px, 0);
+          transition: ${this.toastPointerId === null ? "transform 180ms ease-out" : "none"};"
+      >
+        ${this.toastMessage}
+      </div>
+    </div>`;
+  }
+
+  private renderKothOpenFrontMessages(showInstructions: boolean) {
+    const collusion = this.renderCollusionWarning(true);
+    if (!showInstructions && !this.isVisible && !collusion) return null;
+
+    return html`<div
+      data-openfront-messages
+      class="${OPENFRONT_MESSAGE_CLASSES} flex-col gap-1"
+      style="word-wrap: break-word; hyphens: auto;"
+    >
+      ${
+        showInstructions
+          ? html`<div data-koth-description class="max-w-full">
+              ${translateText("king_of_the_hill.instructions")}
+            </div>`
+          : null
+      }
+      ${
+        this.isVisible
+          ? html`<div data-game-instruction class="max-w-full">
+              ${this.getMessage()}
+            </div>`
+          : null
+      }
+      ${collusion}
+    </div>`;
+  }
+
+  private renderGameInstruction() {
+    if (!this.isVisible) return null;
+    return html`<div
+      data-game-instruction
+      class="fixed top-[15%] left-1/2 -translate-x-1/2 z-[799] ${OPENFRONT_MESSAGE_CLASSES}"
+      style="word-wrap: break-word; hyphens: auto;"
+      @contextmenu=${(e: MouseEvent) => e.preventDefault()}
+    >
+      ${this.getMessage()}
+    </div>`;
+  }
+
+  private renderCollusionWarning(inKothGroup = false) {
+    const showCollusion =
+      this.game?.inSpawnPhase() &&
+      !this.game.config().isReplay() &&
+      !this.game.config().isIntentionalSpectator() &&
+      this.game.config().gameConfig().rankedType !== RankedType.OneVOne &&
+      this.game.config().gameConfig().gameMode === GameMode.FFA &&
+      this.game.config().gameConfig().gameType === GameType.Public &&
+      !this.hasClosedCollusionWarning;
+    if (!showCollusion) return null;
+
+    return html`<div
+      data-collusion-warning
+      class=${
+        inKothGroup
+          ? "flex max-w-full flex-col items-center self-stretch border-t border-amber-500/70 py-2 text-amber-100"
+          : "fixed top-[25%] left-1/2 -translate-x-1/2 z-[799] inline-flex flex-col items-center justify-center min-h-8 lg:min-h-10 w-fit max-w-[90vw] bg-amber-500/70 rounded-md lg:rounded-lg backdrop-blur-xs text-white text-md lg:text-xl px-3 lg:px-4 py-3 text-center break-words"
+      }
+      style="word-wrap: break-word; hyphens: auto; pointer-events: auto;"
+      @contextmenu=${(e: MouseEvent) => e.preventDefault()}
+    >
+      <div>${translateText("heads_up_message.ffa_collusion")}</div>
+      <button
+        class="mt-2 px-3 py-1 rounded bg-black/20 hover:bg-black/30 text-sm"
+        @click=${this.onCloseCollusionWarning}
+      >
+        ${translateText("heads_up_message.dont_show_again")}
+      </button>
+    </div>`;
+  }
+
   render() {
+    if (this.game?.config().isKingOfTheHill()) return this.renderKothHud();
     return html`
       <div style="pointer-events: none;">
         ${
@@ -276,54 +529,7 @@ export class HeadsUpMessage extends LitElement implements Controller {
               `
             : null
         }
-        ${
-          this.isVisible
-            ? html`
-                <div
-                  class="fixed top-[15%] left-1/2 -translate-x-1/2 z-[799]
-                            inline-flex items-center justify-center min-h-8 lg:min-h-10
-                            w-fit max-w-[90vw]
-                            bg-gray-800/70 rounded-md lg:rounded-lg
-                            backdrop-blur-xs text-white text-md lg:text-xl px-3 lg:px-4 py-1
-                            text-center break-words"
-                  style="word-wrap: break-word; hyphens: auto;"
-                  @contextmenu=${(e: MouseEvent) => e.preventDefault()}
-                >
-                  ${this.getMessage()}
-                </div>
-              `
-            : null
-        }
-        ${
-          this.game?.inSpawnPhase() &&
-          !this.game.config().isReplay() &&
-          !this.game.config().isIntentionalSpectator() &&
-          this.game.config().gameConfig().rankedType !== RankedType.OneVOne &&
-          this.game.config().gameConfig().gameMode === GameMode.FFA &&
-          this.game.config().gameConfig().gameType === GameType.Public &&
-          !this.hasClosedCollusionWarning
-            ? html`
-                <div
-                  class="fixed top-[25%] left-1/2 -translate-x-1/2 z-[799]
-                            inline-flex flex-col items-center justify-center min-h-8 lg:min-h-10
-                            w-fit max-w-[90vw]
-                            bg-amber-500/70 rounded-md lg:rounded-lg
-                            backdrop-blur-xs text-white text-md lg:text-xl px-3 lg:px-4 py-3
-                            text-center break-words"
-                  style="word-wrap: break-word; hyphens: auto; pointer-events: auto;"
-                  @contextmenu=${(e: MouseEvent) => e.preventDefault()}
-                >
-                  <div>${translateText("heads_up_message.ffa_collusion")}</div>
-                  <button
-                    class="mt-2 px-3 py-1 rounded bg-black/20 hover:bg-black/30 text-sm"
-                    @click=${this.onCloseCollusionWarning}
-                  >
-                    ${translateText("heads_up_message.dont_show_again")}
-                  </button>
-                </div>
-              `
-            : null
-        }
+        ${this.renderGameInstruction()} ${this.renderCollusionWarning()}
       </div>
     `;
   }

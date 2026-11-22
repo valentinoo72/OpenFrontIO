@@ -16,6 +16,7 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { GameConfig, TeamCountConfig } from "@openfront/engine-api/Schemas";
 import { SAM_CONSTRUCTION_TICKS } from "@openfront/engine-lib/configuration/Config";
+import { rollKingOfTheHillMap } from "@openfront/engine-lib/game/KingOfTheHill";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { mapPlayerCounts } from "@openfront/shared/MapPlayerCounts";
 import { ScheduledPublicGameType } from "@openfront/shared/WireSchemas";
@@ -79,7 +80,11 @@ type ModifierKey =
   | "isSAMsDisabled"
   | "isPeaceTime"
   | "isWaterNukes"
-  | "isDoomsdayClock";
+  | "isDoomsdayClock"
+  | "isKingOfTheHill";
+
+const WATER_NUKES_WEIGHT = 4;
+const KING_OF_THE_HILL_WEIGHT = 4;
 
 // Each entry represents one "ticket" in the pool. More tickets = higher chance of selection.
 // Weights are roughly informed by the community "favorite modifier" poll.
@@ -96,8 +101,9 @@ const SPECIAL_MODIFIER_POOL: ModifierKey[] = [
   ...Array<ModifierKey>(1).fill("isNukesDisabled"),
   ...Array<ModifierKey>(1).fill("isSAMsDisabled"),
   ...Array<ModifierKey>(1).fill("isPeaceTime"),
-  ...Array<ModifierKey>(4).fill("isWaterNukes"),
+  ...Array<ModifierKey>(WATER_NUKES_WEIGHT).fill("isWaterNukes"),
   ...Array<ModifierKey>(4).fill("isDoomsdayClock"),
+  ...Array<ModifierKey>(KING_OF_THE_HILL_WEIGHT).fill("isKingOfTheHill"),
 ];
 
 // Speeds the Doomsday Clock can roll at when it lands in the rotation. Picked
@@ -240,13 +246,29 @@ export class MapPlaylist {
     } satisfies GameConfig;
   }
 
-  private async getSpecialConfig(trusted: boolean): Promise<GameConfig> {
+  private async getSpecialConfig(
+    trusted: boolean,
+    kingOfTheHill = false,
+  ): Promise<GameConfig> {
     const mode = Math.random() < 0.5 ? GameMode.FFA : GameMode.Team;
-    const map = this.getNextMap("special", mode);
+    const map = kingOfTheHill
+      ? rollKingOfTheHillMap(Math.random())
+      : this.getNextMap("special", mode);
     let playerTeams =
-      mode === GameMode.Team ? this.getTeamCount(map) : undefined;
+      mode === GameMode.Team
+        ? this.getTeamCount(map, kingOfTheHill)
+        : undefined;
 
-    const excludedModifiers: ModifierKey[] = [];
+    const excludedModifiers: ModifierKey[] = kingOfTheHill
+      ? [
+          "isKingOfTheHill",
+          "isNukesDisabled",
+          "isWaterNukes",
+          "isHardNations",
+          "isDoomsdayClock",
+          "startingGold25M",
+        ]
+      : [];
 
     // Crowded raises the count to 60/125, which the trusted cap would undo
     // anyway; keep its modifier slot for one that still has an effect.
@@ -338,6 +360,11 @@ export class MapPlaylist {
       undefined,
       appliedForced.size,
     );
+    if (poolResult.isKingOfTheHill) {
+      // KOTH is the mode. Its bonuses use this same ordinary modifier pipeline,
+      // excluding incompatible choices, without consuming a bonus slot.
+      return this.getSpecialConfig(trusted, true);
+    }
     let {
       isCrowded,
       startingGold,
@@ -391,7 +418,7 @@ export class MapPlaylist {
           !isWaterNukes &&
           !isDoomsdayClock
         ) {
-          excludedModifiers.push("isCrowded");
+          excludedModifiers.push("isCrowded", "isKingOfTheHill");
           const fallback = this.getRandomSpecialGameModifiers(
             excludedModifiers,
             1,
@@ -430,10 +457,11 @@ export class MapPlaylist {
       this.adjustForTeams(unadjustedMaxPlayers, playerTeams),
     );
 
-    const nations: GameConfig["nations"] =
-      (mode === GameMode.Team && playerTeams !== HumansVsNations) ||
-      // Nations don't have PVP immunity, so 25M starting gold wouldn't work well with them
-      (startingGold !== undefined && startingGold >= 25_000_000)
+    const nations: GameConfig["nations"] = kingOfTheHill
+      ? "disabled"
+      : (mode === GameMode.Team && playerTeams !== HumansVsNations) ||
+          // Nations don't have PVP immunity, so 25M starting gold wouldn't work well with them
+          (startingGold !== undefined && startingGold >= 25_000_000)
         ? "disabled"
         : "default";
 
@@ -462,6 +490,7 @@ export class MapPlaylist {
       maxPlayers,
       gameType: GameType.Public,
       gameMapSize: isCompact ? GameMapSize.Compact : GameMapSize.Normal,
+      ...(kingOfTheHill ? { kingOfTheHill: true } : {}),
       publicGameModifiers: {
         isCompact,
         isRandomSpawn,
@@ -721,7 +750,7 @@ export class MapPlaylist {
     return maps;
   }
 
-  private getTeamCount(map: GameMapType): TeamCountConfig {
+  private getTeamCount(map: GameMapType, humansOnly = false): TeamCountConfig {
     // Override team count for specific maps
     const forcedTeamCount = SPECIAL_TEAM_MAPS.get(map);
     if (
@@ -731,24 +760,27 @@ export class MapPlaylist {
       return forcedTeamCount;
     }
 
-    const totalWeight = TEAM_WEIGHTS.reduce((sum, w) => sum + w.weight, 0);
+    const weights = humansOnly
+      ? TEAM_WEIGHTS.filter(({ config }) => config !== HumansVsNations)
+      : TEAM_WEIGHTS;
+    const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
     const roll = Math.random() * totalWeight;
 
     let cumulativeWeight = 0;
-    for (const { config, weight } of TEAM_WEIGHTS) {
+    for (const { config, weight } of weights) {
       cumulativeWeight += weight;
       if (roll < cumulativeWeight) {
         return config;
       }
     }
-    return TEAM_WEIGHTS[0].config;
+    return weights[0].config;
   }
 
   private getRandomSpecialGameModifiers(
     excludedModifiers: ModifierKey[] = [],
     count?: number,
     countReduction: number = 0,
-  ): PublicGameModifiers {
+  ): PublicGameModifiers & { isKingOfTheHill?: boolean } {
     // Roll how many modifiers to pick: 30% → 1, 50% → 2, 20% → 3
     const modifierCounts = [1, 1, 1, 2, 2, 2, 2, 2, 3, 3];
     const rolled =
@@ -790,6 +822,7 @@ export class MapPlaylist {
       isPeaceTime: selected.has("isPeaceTime") || undefined,
       isWaterNukes: selected.has("isWaterNukes") || undefined,
       isDoomsdayClock: selected.has("isDoomsdayClock") || undefined,
+      isKingOfTheHill: selected.has("isKingOfTheHill") || undefined,
     };
   }
 

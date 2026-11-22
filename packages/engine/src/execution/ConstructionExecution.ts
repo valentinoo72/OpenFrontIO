@@ -1,5 +1,9 @@
 import { TileRef } from "@openfront/engine-api/game/GameMap";
-import { Tick, UnitType } from "@openfront/engine-api/game/GameTypes";
+import {
+  Structures,
+  Tick,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import {
   zInt,
   zPlayerRef,
@@ -61,7 +65,7 @@ export class ConstructionExecution implements Execution {
     if (this.structure === null) {
       const info = this.mg.unitInfo(this.constructionType);
       // For non-structure units (nukes/warship), charge once and delegate to specialized executions.
-      const isStructure = this.isStructure(this.constructionType);
+      const isStructure = Structures.has(this.constructionType);
       if (!isStructure) {
         // Defer validation and gold deduction to the specific execution
         this.completeConstruction();
@@ -83,8 +87,14 @@ export class ConstructionExecution implements Execution {
       );
       const duration = info.constructionDuration ?? 0;
       if (duration > 0) {
-        this.structure.setUnderConstruction(true);
-        this.ticksUntilComplete = duration;
+        const isThrone = this.constructionType === UnitType.Throne;
+        this.structure.setUnderConstruction(
+          true,
+          isThrone ? ticks + duration : undefined,
+        );
+        // The creation tick does not advance the countdown. A throne placed
+        // on T finishes on T + 300.
+        this.ticksUntilComplete = isThrone ? duration - 1 : duration;
         return;
       }
       // No construction time
@@ -164,25 +174,14 @@ export class ConstructionExecution implements Execution {
       case UnitType.Factory:
         this.mg.addExecution(new FactoryExecution(this.structure!));
         break;
+      case UnitType.Throne:
+        // The game resolves the completed throne after this tick's combat.
+        break;
       default:
         console.warn(
           `unit type ${this.constructionType} cannot be constructed`,
         );
         break;
-    }
-  }
-
-  private isStructure(type: UnitType): boolean {
-    switch (type) {
-      case UnitType.Port:
-      case UnitType.MissileSilo:
-      case UnitType.DefensePost:
-      case UnitType.SAMLauncher:
-      case UnitType.City:
-      case UnitType.Factory:
-        return true;
-      default:
-        return false;
     }
   }
 

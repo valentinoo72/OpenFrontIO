@@ -1,0 +1,132 @@
+import {
+  GameMapSize,
+  GameMapType,
+  GameMode,
+  HumansVsNations,
+  PublicGameModifiers,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
+import { GameConfig } from "@openfront/engine-api/Schemas";
+import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MapPlaylist } from "../../src/server/MapPlaylist";
+
+vi.mock("../../src/server/MapLandTiles", () => ({
+  getMapLandTiles: async () => 1_000_000,
+}));
+type Internals = {
+  getSpecialConfig(trusted: boolean, koth?: boolean): Promise<GameConfig>;
+  getRandomSpecialGameModifiers(
+    excluded?: string[],
+    count?: number,
+    reduction?: number,
+  ): PublicGameModifiers & { isKingOfTheHill?: boolean };
+  getTeamCount(map: GameMapType, humansOnly?: boolean): number | string;
+};
+const internal = (p: MapPlaylist) => p as unknown as Internals;
+afterEach(() => vi.restoreAllMocks());
+
+describe("KOTH public rotation", () => {
+  it("uses the ordinary modifier picker with KOTH-specific exclusions", async () => {
+    const p = internal(new MapPlaylist());
+    const picker = vi.spyOn(p, "getRandomSpecialGameModifiers");
+    const random = new PseudoRandom(43);
+    vi.spyOn(Math, "random").mockImplementation(() => random.next());
+    const modes = new Set<GameMode>();
+    const modifiers = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const c = await p.getSpecialConfig(i % 2 === 0, true);
+      modes.add(c.gameMode);
+      expect(c.kingOfTheHill).toBe(true);
+      expect(c.nations).toBe("disabled");
+      expect(c.playerTeams).not.toBe(HumansVsNations);
+      expect(c.waterNukes).not.toBe(true);
+      expect(c.doomsdayClock).toBeUndefined();
+      expect(c.overtime).toBeUndefined();
+      expect(c.startingGold).not.toBe(25_000_000);
+      for (const u of [
+        UnitType.AtomBomb,
+        UnitType.HydrogenBomb,
+        UnitType.MIRV,
+        UnitType.MissileSilo,
+      ])
+        expect(c.disabledUnits).not.toContain(u);
+      expect(c.publicGameModifiers).not.toHaveProperty("isKingOfTheHill");
+      const active = Object.entries(c.publicGameModifiers ?? {}).filter(
+        ([, v]) => !!v,
+      );
+      expect(active.length).toBeGreaterThanOrEqual(1);
+      expect(active.length).toBeLessThanOrEqual(3);
+      for (const [key] of active) modifiers.add(key);
+      if (i % 2 === 0) expect(c.maxPlayers).toBeLessThanOrEqual(25);
+    }
+    expect(modes).toEqual(new Set([GameMode.FFA, GameMode.Team]));
+    expect(modifiers.has("startingGold")).toBe(true);
+    expect(modifiers.has("isCompact")).toBe(true);
+    expect(modifiers.has("isSAMsDisabled")).toBe(true);
+    for (const [excluded] of picker.mock.calls)
+      expect(excluded).toEqual(
+        expect.arrayContaining([
+          "isKingOfTheHill",
+          "isNukesDisabled",
+          "isWaterNukes",
+          "isHardNations",
+          "isDoomsdayClock",
+          "startingGold25M",
+        ]),
+      );
+  });
+
+  it("selects KOTH as a mode and rerolls all three modifier slots normally", async () => {
+    const p = new MapPlaylist();
+    const engine = internal(p);
+    const picker = vi
+      .spyOn(engine, "getRandomSpecialGameModifiers")
+      .mockReturnValueOnce({ isKingOfTheHill: true })
+      .mockReturnValue({
+        isRandomSpawn: true,
+        goldMultiplier: 2,
+        startingGold: 5_000_000,
+      });
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+    const c = await p.gameConfig("special");
+    expect(c).toMatchObject({
+      kingOfTheHill: true,
+      gameMode: GameMode.FFA,
+      randomSpawn: true,
+      startingGold: 5_000_000,
+      goldMultiplier: 2,
+      spawnImmunityDuration: 450,
+    });
+    expect(Object.values(c.publicGameModifiers!).filter(Boolean)).toHaveLength(
+      3,
+    );
+    expect(picker).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([0.1, 0.4, 0.8])(
+    "uses ordinary map capacity tiers at roll %s",
+    async (roll) => {
+      const p = internal(new MapPlaylist());
+      vi.spyOn(Math, "random").mockReturnValue(roll);
+      vi.spyOn(p, "getRandomSpecialGameModifiers").mockReturnValue({
+        goldMultiplier: 2,
+      });
+      const c = await p.getSpecialConfig(false, true);
+      expect(c.gameMapSize).toBe(GameMapSize.Normal);
+      // 1M land: 50/40/25, with the normal 1.5x team adjustment and team rounding.
+      if (c.gameMode === GameMode.FFA)
+        expect(c.maxPlayers).toBe(roll < 0.3 ? 50 : 40);
+      else expect(c.maxPlayers).toBeLessThanOrEqual(38);
+    },
+  );
+
+  it("excludes Humans vs Nations from the ordinary weighted team selection", () => {
+    const p = internal(new MapPlaylist());
+    for (let i = 0; i < 100; i++) {
+      const random = vi.spyOn(Math, "random").mockReturnValue((i + 0.5) / 100);
+      expect(p.getTeamCount(GameMapType.Luna, true)).not.toBe(HumansVsNations);
+      random.mockRestore();
+    }
+  });
+});

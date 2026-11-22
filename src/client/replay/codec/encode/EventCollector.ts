@@ -5,6 +5,7 @@
  * destroyed map layers.
  */
 
+import { UnitType } from "@openfront/engine-api/game/GameTypes";
 import {
   GameUpdateType,
   type RailroadConstructionUpdate,
@@ -129,7 +130,13 @@ export class EventCollector {
       if (u.underConstruction && u.isActive) {
         if (!this.constructing.has(u.id)) {
           this.constructing.add(u.id);
-          this.constructionStarts.push({ unitId: u.id, startTick: tick });
+          this.constructionStarts.push({
+            unitId: u.id,
+            startTick:
+              u.unitType === UnitType.Throne
+                ? (u.constructionStartTick ?? tick)
+                : tick,
+          });
         }
       } else {
         this.constructing.delete(u.id);

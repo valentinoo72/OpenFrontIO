@@ -101,6 +101,7 @@ describe("BuildPreviewController nuke range warning", () => {
     const game = {
       myPlayer: () => ({ smallID: () => 1, allies: () => allyPlayers }),
       config: () => ({
+        isKingOfTheHill: () => false,
         nukeMagnitudes: () => ({ inner: 1, outer: 2 }),
         nukeAllianceBreakThreshold: () => 0,
       }),
@@ -154,6 +155,7 @@ describe("BuildPreviewController confirm with the pointer off the map", () => {
     const width = 10;
     const height = 10;
     const game = {
+      config: () => ({ isKingOfTheHill: () => false }),
       isImpassable: () => false,
       isValidCoord: (x: number, y: number) =>
         x >= 0 && y >= 0 && x < width && y < height,
@@ -554,6 +556,7 @@ describe("BuildPreviewController idle diffing optimization", () => {
         return [];
       },
       config: () => ({
+        isKingOfTheHill: () => false,
         samRange: (_lvl: number) => 10,
         nukeMagnitudes: (_type: UnitType) => ({ inner: 5, outer: 10 }),
         nukeAllianceBreakThreshold: () => 100,
@@ -1043,6 +1046,7 @@ describe("BuildPreviewController 0-allocation mutable render buffer", () => {
       players: () => [],
       units: () => [],
       config: () => ({
+        isKingOfTheHill: () => false,
         samRange: () => 10,
         nukeMagnitudes: () => ({ inner: 5, outer: 10 }),
         nukeAllianceBreakThreshold: () => 100,
@@ -1313,6 +1317,7 @@ describe("BuildPreviewController Single-Flight Coalescing Guard with Tile-Change
       players: () => [mockMyPlayer],
       units: () => [],
       config: () => ({
+        isKingOfTheHill: () => false,
         samRange: () => 10,
         nukeMagnitudes: () => ({ inner: 5, outer: 10 }),
         nukeAllianceBreakThreshold: () => 100,
@@ -1785,6 +1790,7 @@ describe("BuildPreviewController touch preview", () => {
         x: (ref: number) => Math.floor(ref / 100),
         y: (ref: number) => ref % 100,
         config: () => ({
+          isKingOfTheHill: () => false,
           nukeMagnitudes: () => ({ inner: 5, outer: 10 }),
           nukeAllianceBreakThreshold: () => 100,
         }),

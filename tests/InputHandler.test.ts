@@ -1778,7 +1778,10 @@ describe("Warship box selection (Shift+drag)", () => {
   let uiState: UIState;
 
   beforeEach(() => {
-    const mockGameView = { inSpawnPhase: () => false } as GameView;
+    const mockGameView = {
+      inSpawnPhase: () => false,
+      config: () => ({ gameConfig: () => ({}) }),
+    } as GameView;
     mockCanvas = document.createElement("canvas");
     eventBus = new EventBus();
     uiState = {

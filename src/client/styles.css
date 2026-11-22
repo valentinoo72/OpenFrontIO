@@ -20,6 +20,11 @@
    right edge. UnitDisplay.isSideBar() asks the same query. */
 @custom-variant side-bar (@media (width < 64rem) and (orientation: portrait));
 
+:root {
+  --koth-player-info-bottom: 5.5rem;
+  --koth-hud-gap: 0.5rem;
+}
+
 @theme {
   --default-ring-width: 3px;
   --default-ring-color: var(--color-malibu-blue);

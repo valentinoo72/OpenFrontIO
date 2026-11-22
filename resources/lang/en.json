@@ -1772,6 +1772,26 @@
     "lobby_creator": "Kicked by lobby creator",
     "match_cancelled": "Match cancelled: a player failed to connect. You have not lost any ELO."
   },
+  "king_of_the_hill": {
+    "build_description": "Whichever player successfully places down a throne on the highlighted area wins the game",
+    "choose_spawn_outside": "Choose a starting location outside the highlighted areas.",
+    "enemy_throne": "Enemy throne",
+    "humans_vs_nations_blocked": "Humans vs Nations can't be used with King of the Hill.",
+    "immunity_blocked": "You can't place a throne during PvP immunity.",
+    "instructions": "Finish building a throne in the highlighted area to win.",
+    "maps": "King of the Hill maps",
+    "name": "King of the Hill",
+    "nations_blocked": "Nations can't be used with King of the Hill.",
+    "own_throne": "Your throne",
+    "place_throne": "Place Throne",
+    "seconds": "{seconds}s",
+    "spawn_blocked": "You can't spawn on the throne site.",
+    "structure_blocked": "You can't place a {structure} on the throne site.",
+    "team_instructions": "Win the game by successfully placing a throne on the highlighted area. Thrones takes 2 million gold to place and 30 seconds to build.",
+    "teammate_throne": "Team throne",
+    "throne_win_timer": "{timer} to win",
+    "water_nukes_blocked": "Water Nukes can't be used with King of the Hill."
+  },
   "lang": {
     "en": "English",
     "lang_code": "en",
@@ -3192,6 +3212,7 @@
     "missile_silo": "Missile Silo",
     "port": "Port",
     "sam_launcher": "SAM Launcher",
+    "throne": "Throne",
     "warship": "Warship"
   },
   "update_available": {

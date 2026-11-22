@@ -34,6 +34,7 @@ import {
 import { ReadonlyTileSet } from "@openfront/engine-api/game/ReadViews";
 import { ClientID } from "@openfront/engine-api/Schemas";
 import { andFN, manhattanDistFN } from "@openfront/engine-lib/game/GameMapImpl";
+import { isThronePlacementTile } from "@openfront/engine-lib/game/KingOfTheHill";
 import { TileSet } from "@openfront/engine-lib/game/TileSet";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import {
@@ -1601,6 +1602,20 @@ export class PlayerImpl implements Player {
     targetTile: TileRef,
     validTiles: TileRef[] | null,
   ): TileRef | false {
+    if (
+      unitType !== UnitType.Throne &&
+      Structures.has(unitType) &&
+      this.mg.config().isKingOfTheHill()
+    ) {
+      const { gameMap, gameMapSize } = this.mg.config().gameConfig();
+      if (isThronePlacementTile(this.mg, gameMap, targetTile, gameMapSize))
+        return false;
+      validTiles = (
+        validTiles ?? this.validStructureSpawnTiles(targetTile)
+      ).filter(
+        (tile) => !isThronePlacementTile(this.mg, gameMap, tile, gameMapSize),
+      );
+    }
     switch (unitType) {
       case UnitType.MIRV:
         if (!this.mg.hasOwner(targetTile)) {
@@ -1631,6 +1646,31 @@ export class PlayerImpl implements Player {
       case UnitType.City:
       case UnitType.Factory:
         return this.landBasedStructureSpawn(targetTile, validTiles);
+      case UnitType.Throne: {
+        const config = this.mg.config();
+        const map = this.mg.map();
+        const { gameMap, gameMapSize } = config.gameConfig();
+        const timeLimit = config.gameConfig().maxTimerValue;
+        if (
+          this.type() !== PlayerType.Human ||
+          this.mg.inSpawnPhase() ||
+          this.mg.isSpawnImmunityActive() ||
+          this.mg.getWinner() !== null ||
+          (timeLimit !== undefined &&
+            timeLimit !== null &&
+            timeLimit > 0 &&
+            this.mg.elapsedGameSeconds() >= timeLimit * 60) ||
+          !isThronePlacementTile(map, gameMap, targetTile, gameMapSize)
+        ) {
+          return false;
+        }
+        const tiles = validTiles ?? this.validStructureSpawnTiles(targetTile);
+        return (
+          tiles.find((tile) =>
+            isThronePlacementTile(map, gameMap, tile, gameMapSize),
+          ) ?? false
+        );
+      }
       default:
         assertNever(unitType);
     }

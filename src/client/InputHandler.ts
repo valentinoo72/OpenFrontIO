@@ -25,6 +25,24 @@ export class MouseUpEvent implements GameEvent {
   ) {}
 }
 
+export class PlaceHoveredThroneEvent implements GameEvent {
+  handled = false;
+
+  constructor(
+    public readonly x: number,
+    public readonly y: number,
+  ) {}
+}
+
+export class DismissHoveredThroneEvent implements GameEvent {
+  handled = false;
+
+  constructor(
+    public readonly x: number,
+    public readonly y: number,
+  ) {}
+}
+
 export class MouseOverEvent implements GameEvent {
   constructor(
     public readonly x: number,
@@ -1416,6 +1434,15 @@ export class InputHandler {
       }
 
       if (
+        this.uiState.ghostStructure === null &&
+        this.gameView.config().gameConfig().kingOfTheHill === true
+      ) {
+        const placement = new PlaceHoveredThroneEvent(event.x, event.y);
+        this.eventBus.emit(placement);
+        if (placement.handled) return;
+      }
+
+      if (
         !this.userSettings.leftClickOpensMenu() ||
         event.shiftKey ||
         this.gameView.inSpawnPhase() || // No Radial Menu during spawn phase, only spawn point selection
@@ -1624,8 +1651,14 @@ export class InputHandler {
     if (this.gameView.inSpawnPhase()) {
       return;
     }
-    if (this.uiState.ghostStructure !== null) {
+    const selectedStructure = this.uiState.ghostStructure;
+    if (selectedStructure !== null) {
       this.setGhostStructure(null);
+      if (selectedStructure === UnitType.Throne) {
+        this.eventBus.emit(
+          new DismissHoveredThroneEvent(event.clientX, event.clientY),
+        );
+      }
       return;
     }
     // If a warship/boat is selected, right-click cancels the selection rather
@@ -1634,6 +1667,12 @@ export class InputHandler {
       this.eventBus.emit(new UnitSelectionEvent(null, false));
       return;
     }
+    const dismissThrone = new DismissHoveredThroneEvent(
+      event.clientX,
+      event.clientY,
+    );
+    this.eventBus.emit(dismissThrone);
+    if (dismissThrone.handled) return;
     this.eventBus.emit(new ContextMenuEvent(event.clientX, event.clientY));
   }
 

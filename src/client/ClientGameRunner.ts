@@ -13,6 +13,7 @@ import {
 } from "@openfront/engine-api/game/GameUpdates";
 import { ClientID, GameID } from "@openfront/engine-api/Schemas";
 import { Config } from "@openfront/engine-lib/configuration/Config";
+import { isThronePlacementTile } from "@openfront/engine-lib/game/KingOfTheHill";
 import { TerrainMapData } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { findClosestBy } from "@openfront/engine-lib/Util";
 import { EventBus } from "@openfront/shared/EventBus";
@@ -27,7 +28,7 @@ import {
   WireGameStartInfo,
 } from "@openfront/shared/WireSchemas";
 import { ClientEnv } from "../client/ClientEnv";
-import { reloadForUpdate, translateText } from "../client/Utils";
+import { reloadForUpdate, showToast, translateText } from "../client/Utils";
 import { rememberAdmitted } from "./AdmittedLobbies";
 import { MapLayerController } from "./controllers/MapLayerController";
 import { isDesktopShell } from "./DesktopShell";
@@ -1337,6 +1338,19 @@ export class ClientGameRunner {
       this.gameView.inSpawnPhase() &&
       !this.gameView.config().isRandomSpawn()
     ) {
+      const config = this.gameView.config();
+      if (
+        config.isKingOfTheHill() &&
+        isThronePlacementTile(
+          this.gameView,
+          config.gameConfig().gameMap,
+          tile,
+          config.gameConfig().gameMapSize,
+        )
+      ) {
+        showToast(translateText("king_of_the_hill.spawn_blocked"), "red", 3500);
+        return;
+      }
       this.eventBus.emit(new SendSpawnIntentEvent(tile));
       return;
     }

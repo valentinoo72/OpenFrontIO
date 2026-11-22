@@ -50,6 +50,7 @@ export class UnitImpl implements Unit {
   private _destroyer: Player | undefined = undefined;
   private _lastSetSafeFromPirates: number; // Only for trade ships
   private _underConstruction: boolean = false;
+  private _constructionEndsAt?: Tick;
   private _lastOwner: PlayerImpl | null = null;
   private _troops: number;
   // Number of missiles in cooldown, if empty all missiles are ready.
@@ -191,6 +192,7 @@ export class UnitImpl implements Unit {
       lastPos: this._lastTile,
       health: this.hasHealth() ? Number(this._health) : undefined,
       underConstruction: this._underConstruction,
+      constructionEndsAt: this._constructionEndsAt,
       targetUnitId: this._targetUnit?.id() ?? undefined,
       targetTile: this.targetTile() ?? undefined,
       missileTimerQueue: this._missileTimerQueue,
@@ -542,9 +544,13 @@ export class UnitImpl implements Unit {
     return this._underConstruction;
   }
 
-  setUnderConstruction(underConstruction: boolean): void {
+  setUnderConstruction(
+    underConstruction: boolean,
+    constructionEndsAt?: Tick,
+  ): void {
     if (this._underConstruction !== underConstruction) {
       this._underConstruction = underConstruction;
+      if (underConstruction) this._constructionEndsAt = constructionEndsAt;
       // nearbyUnits skips structures under construction, so this flip changes
       // what a rail plan sees.
       this.mg.noteStructureChange(this);
@@ -842,6 +848,7 @@ export class UnitImpl implements Unit {
       destroyer: w.playerOrNull(this._destroyer),
       lastSetSafeFromPirates: this._lastSetSafeFromPirates,
       underConstruction: this._underConstruction,
+      constructionEndsAt: this._constructionEndsAt,
       lastOwner: w.playerOrNull(this._lastOwner),
       troops: this._troops,
       missileTimerQueue: [...this._missileTimerQueue],
@@ -894,6 +901,7 @@ export class UnitImpl implements Unit {
     this._destroyer = r.playerOrNull(s.destroyer) ?? undefined;
     this._lastSetSafeFromPirates = s.lastSetSafeFromPirates;
     this._underConstruction = s.underConstruction;
+    this._constructionEndsAt = s.constructionEndsAt;
     this._lastOwner = r.playerOrNull(s.lastOwner) as PlayerImpl | null;
     this._troops = s.troops;
     this._missileTimerQueue = [...s.missileTimerQueue];
@@ -911,7 +919,8 @@ export class UnitImpl implements Unit {
 
 export const UnitSnapshot = snapshotType({
   name: "Unit",
-  version: 1,
+  version: 2,
+  migrations: { 1: (data) => data },
   schema: z.object({
     id: zInt(),
     type: UnitTypeSchema,
@@ -950,6 +959,7 @@ export const UnitSnapshot = snapshotType({
     destroyer: zPlayerRef().nullable(),
     lastSetSafeFromPirates: zInt(),
     underConstruction: z.boolean(),
+    constructionEndsAt: zInt().optional(),
     lastOwner: zPlayerRef().nullable(),
     troops: zNum(),
     missileTimerQueue: z.array(zInt()),

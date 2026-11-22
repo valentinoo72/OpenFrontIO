@@ -3,6 +3,7 @@ import {
   GameMapSize,
   GameMapType,
   GameMode,
+  HumansVsNations,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import {
@@ -11,6 +12,11 @@ import {
   TeamCountConfig,
 } from "@openfront/engine-api/Schemas";
 import { DoomsdayClockSpeed } from "@openfront/engine-lib/game/DoomsdayClock";
+import {
+  isKingOfTheHillMap,
+  KING_OF_THE_HILL_MAPS,
+  rollKingOfTheHillMap,
+} from "@openfront/engine-lib/game/KingOfTheHill";
 import { GameEnv } from "@openfront/shared/configuration/Env";
 import { EventBus } from "@openfront/shared/EventBus";
 import {
@@ -122,6 +128,17 @@ export class HostLobbyModal extends BaseModal {
   @state() private nameReveals: string[] = [];
   @state() private whitelistEnabled: boolean = false;
   @state() private allowedPublicIds: string = "";
+  @state() private kingOfTheHill = false;
+  private get kothDisabledReason(): string | undefined {
+    if (this.kingOfTheHill) return undefined;
+    if (this.waterNukes)
+      return translateText("king_of_the_hill.water_nukes_blocked");
+    if (this.gameMode === GameMode.Team && this.teamCount === HumansVsNations)
+      return translateText("king_of_the_hill.humans_vs_nations_blocked");
+    return undefined;
+  }
+
+  private kothLoadedFor: string | null = null;
   @state() private waterNukes: boolean = false;
   @state() private lobbyId = "";
   @state() private lobbyUrlSuffix = "";
@@ -184,6 +201,15 @@ export class HostLobbyModal extends BaseModal {
     const lobby = event.lobby;
     if (!this.lobbyId || lobby.gameID !== this.lobbyId) {
       return;
+    }
+    if (this.kothLoadedFor !== this.lobbyId) {
+      this.kothLoadedFor = this.lobbyId;
+      if (lobby.gameConfig?.kingOfTheHill) {
+        this.kingOfTheHill = true;
+        this.selectedMap = lobby.gameConfig.gameMap;
+        this.gameMode = lobby.gameConfig.gameMode;
+        this.teamCount = lobby.gameConfig.playerTeams ?? this.teamCount;
+      }
     }
     // A host returning to an existing lobby (?host) starts with default
     // settings; without this, their next change of any setting would send
@@ -703,18 +729,27 @@ export class HostLobbyModal extends BaseModal {
             .sectionGapClass=${"space-y-10"}
             .settings=${{
               map: {
+                titleKey: this.kingOfTheHill
+                  ? "king_of_the_hill.maps"
+                  : undefined,
+                allowedMaps: this.kingOfTheHill
+                  ? KING_OF_THE_HILL_MAPS
+                  : undefined,
                 selected: this.selectedMap,
                 useRandom: this.useRandomMap,
                 randomMapDivider: true,
               },
               difficulty: {
                 selected: this.selectedDifficulty,
-                disabled: this.nations === 0,
+                disabled: this.kingOfTheHill || this.nations === 0,
               },
               gameMode: {
                 selected: this.gameMode,
               },
               teamCount: {
+                humansVsNationsDisabledReason: this.kingOfTheHill
+                  ? translateText("king_of_the_hill.humans_vs_nations_blocked")
+                  : undefined,
                 selected: this.teamCount,
               },
               options: {
@@ -725,7 +760,10 @@ export class HostLobbyModal extends BaseModal {
                   disabledKey: "common.disabled",
                 },
                 nations: {
-                  value: this.nations,
+                  value: this.kingOfTheHill ? 0 : this.nations,
+                  disabledReason: this.kingOfTheHill
+                    ? translateText("king_of_the_hill.nations_blocked")
+                    : undefined,
                   defaultValue: this.defaultNationCount,
                   labelKey: "game_settings.nations",
                   disabledKey: "common.disabled",
@@ -766,6 +804,15 @@ export class HostLobbyModal extends BaseModal {
                   {
                     labelKey: "game_settings.water_nukes",
                     checked: this.waterNukes,
+                    disabledReason:
+                      this.kingOfTheHill && !this.waterNukes
+                        ? translateText("king_of_the_hill.water_nukes_blocked")
+                        : undefined,
+                  },
+                  {
+                    labelKey: "king_of_the_hill.name",
+                    checked: this.kingOfTheHill,
+                    disabledReason: this.kothDisabledReason,
                   },
                   {
                     labelKey: "game_settings.doomsday_clock",
@@ -1128,6 +1175,7 @@ export class HostLobbyModal extends BaseModal {
     this.nameReveals = [];
     this.whitelistEnabled = false;
     this.allowedPublicIds = "";
+    this.kingOfTheHill = false;
     this.waterNukes = false;
     this.hostCheatsEnabled = false;
     this.hostCheatInfiniteGold = false;
@@ -1148,7 +1196,9 @@ export class HostLobbyModal extends BaseModal {
 
   private async handleSelectRandomMap() {
     this.useRandomMap = true;
-    this.selectedMap = getRandomMapType();
+    this.selectedMap = this.kingOfTheHill
+      ? rollKingOfTheHillMap(Math.random())
+      : getRandomMapType();
     await this.loadNationCount();
     void this.putGameConfig();
   }
@@ -1228,7 +1278,42 @@ export class HostLobbyModal extends BaseModal {
         this.anonymizeNames = checked;
         void this.putGameConfig();
         break;
+      case "king_of_the_hill.name":
+        if (checked && this.waterNukes) {
+          showToast(
+            translateText("king_of_the_hill.water_nukes_blocked"),
+            "red",
+          );
+          return;
+        }
+        if (
+          checked &&
+          this.gameMode === GameMode.Team &&
+          this.teamCount === HumansVsNations
+        ) {
+          showToast(
+            translateText("king_of_the_hill.humans_vs_nations_blocked"),
+            "red",
+          );
+          return;
+        }
+        this.kothLoadedFor = this.lobbyId;
+        this.kingOfTheHill = checked;
+        if (checked && !isKingOfTheHillMap(this.selectedMap)) {
+          void this.handleMapSelection(KING_OF_THE_HILL_MAPS[0]);
+          return;
+        }
+        this.useRandomMap = false;
+        void this.putGameConfig();
+        break;
       case "game_settings.water_nukes":
+        if (checked && this.kingOfTheHill) {
+          showToast(
+            translateText("king_of_the_hill.water_nukes_blocked"),
+            "red",
+          );
+          return;
+        }
         this.waterNukes = checked;
         void this.putGameConfig();
         break;
@@ -1639,6 +1724,10 @@ export class HostLobbyModal extends BaseModal {
   };
 
   private handleNationsChange = (e: Event) => {
+    if (this.kingOfTheHill) {
+      showToast(translateText("king_of_the_hill.nations_blocked"), "red");
+      return;
+    }
     const customEvent = e as CustomEvent<{ value: number }>;
     const value = customEvent.detail.value;
     if (isNaN(value) || value < 0 || value > 400) {
@@ -1656,6 +1745,17 @@ export class HostLobbyModal extends BaseModal {
   };
 
   private async handleGameModeSelection(value: GameMode) {
+    if (
+      this.kingOfTheHill &&
+      value === GameMode.Team &&
+      this.teamCount === HumansVsNations
+    ) {
+      showToast(
+        translateText("king_of_the_hill.humans_vs_nations_blocked"),
+        "red",
+      );
+      return;
+    }
     this.gameMode = value;
     if (this.gameMode === GameMode.Team) {
       this.donateGold = true;
@@ -1668,6 +1768,13 @@ export class HostLobbyModal extends BaseModal {
   }
 
   private async handleTeamCountSelection(value: TeamCountConfig) {
+    if (this.kingOfTheHill && value === HumansVsNations) {
+      showToast(
+        translateText("king_of_the_hill.humans_vs_nations_blocked"),
+        "red",
+      );
+      return;
+    }
     this.teamCount = value;
     void this.putGameConfig();
   }
@@ -1765,6 +1872,7 @@ export class HostLobbyModal extends BaseModal {
       startingGoldValue: this.startingGoldValue,
       customAlliances: this.customAlliances,
       customAllianceMinutes: this.customAllianceMinutes,
+      kingOfTheHill: this.kingOfTheHill,
       waterNukes: this.waterNukes,
       doomsdayClock: this.doomsdayClock,
       doomsdayClockSpeed: this.doomsdayClockSpeed,
@@ -1812,6 +1920,7 @@ export class HostLobbyModal extends BaseModal {
     this.startingGoldValue = config.startingGoldValue;
     this.customAlliances = config.customAlliances ?? false;
     this.customAllianceMinutes = config.customAllianceMinutes;
+    this.kingOfTheHill = config.kingOfTheHill ?? false;
     this.waterNukes = config.waterNukes ?? false;
     this.doomsdayClock = config.doomsdayClock ?? false;
     this.doomsdayClockSpeed = config.doomsdayClockSpeed ?? "normal";
@@ -1931,6 +2040,7 @@ export class HostLobbyModal extends BaseModal {
       new CustomEvent("update-game-config", {
         detail: {
           config: {
+            kingOfTheHill: this.kingOfTheHill,
             gameMap: this.selectedMap,
             gameMapSize: this.compactMap
               ? GameMapSize.Compact
@@ -1949,10 +2059,9 @@ export class HostLobbyModal extends BaseModal {
               ? spawnImmunityTicks
               : null,
             playerTeams: this.teamCount,
-            nations: sliderToNationsConfig(
-              this.nations,
-              this.defaultNationCount,
-            ),
+            nations: this.kingOfTheHill
+              ? "disabled"
+              : sliderToNationsConfig(this.nations, this.defaultNationCount),
             maxTimerValue: this.maxTimer === true ? this.maxTimerValue : null,
             winThresholdTenths:
               this.winThreshold === true && this.winThresholdValue !== undefined

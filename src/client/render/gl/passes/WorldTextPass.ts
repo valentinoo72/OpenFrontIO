@@ -10,6 +10,7 @@
 import type { Config } from "@openfront/engine-lib/configuration/Config";
 import type { BonusEvent, ConquestFx } from "../../types";
 import type { RenderSettings } from "../RenderSettings";
+import { placementIconBottomPx } from "../utils/BuildPreviewGeometry";
 import { renderDpr } from "../utils/Dpr";
 import { createProgram } from "../utils/GlUtils";
 import type { GlyphTables } from "./name-pass/AtlasData";
@@ -40,6 +41,7 @@ const CONQUEST_SCALE = 6;
 const CONQUEST_OUTLINE_WIDTH = 2.0;
 /** Matches player-name outline width for a consistent UI look. */
 const GHOST_COST_OUTLINE_WIDTH = 1.4;
+const GHOST_COST_ICON_GAP_PX = 3;
 /**
  * Screen-relative em scale for attack troop labels. Pre-divided by the current
  * zoom each frame so the on-screen label size stays constant regardless of
@@ -122,12 +124,14 @@ export class WorldTextPass {
   private fontSize: number;
   private atlasScaleH: number;
   private base: number;
+  private readonly costTopInsetEm: number;
 
   // Active popups (both conquest and bonus, unified)
   private active: ActivePopup[] = [];
 
   // Persistent ghost-cost label (separate from popup lifecycle; doesn't fade).
   private ghostCostLabel: {
+    ghostType: string;
     x: number;
     y: number;
     text: string;
@@ -169,6 +173,18 @@ export class WorldTextPass {
     this.fontSize = atlas.fontSize;
     this.atlasScaleH = atlas.scaleH;
     this.base = atlas.base;
+    // Account for the glyph origin used in the vertex shader, including the
+    // top bearing of the characters emitted by renderNumber.
+    let costTopBearing = 0;
+    for (const char of atlas.chars) {
+      if (
+        char.id < 128 &&
+        "0123456789.BKM".includes(String.fromCharCode(char.id))
+      ) {
+        costTopBearing = Math.min(costTopBearing, char.yoffset);
+      }
+    }
+    this.costTopInsetEm = (atlas.base * 0.5 - costTopBearing) / atlas.fontSize;
 
     // Compile shaders
     this.program = createProgram(gl, vertSrc, fragSrc, "WorldTextPass");
@@ -327,6 +343,7 @@ export class WorldTextPass {
    */
   setGhostCostLabel(
     label: {
+      ghostType: string;
       tileX: number;
       tileY: number;
       cost: number;
@@ -356,6 +373,7 @@ export class WorldTextPass {
     // pass raw tile coords here — same convention as the other popup entries.
     // Y offset is applied in rebuildInstances (zoom-relative).
     this.ghostCostLabel = {
+      ghostType: label.ghostType,
       x: label.tileX,
       y: label.tileY,
       // cost 0 means "no cost line" (multiplier-badge-only label).
@@ -522,8 +540,17 @@ export class WorldTextPass {
     if (label) {
       const invZoom = 1 / Math.max(zoom, 0.0001);
       const ghostScale = this.settings.ghostCost.screenScale * dpr * invZoom;
+      const iconBottomPx = placementIconBottomPx(
+        this.settings.structure,
+        label.ghostType,
+        zoom,
+      );
       const ghostY =
-        label.y + this.settings.ghostCost.screenYOffset * dpr * invZoom;
+        label.y +
+        (iconBottomPx === undefined
+          ? this.settings.ghostCost.screenYOffset * dpr * invZoom
+          : (iconBottomPx + GHOST_COST_ICON_GAP_PX * dpr) * invZoom +
+            this.costTopInsetEm * ghostScale);
       const halfW =
         (Math.max(label.text.length, label.topText?.length ?? 0) * 0.6 + 0.5) *
         ghostScale;

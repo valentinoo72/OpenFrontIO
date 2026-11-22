@@ -66,6 +66,7 @@ export interface MenuElement {
   displayed?: boolean | ((params: MenuElementParams) => boolean);
   color?: string | ((params: MenuElementParams) => string);
   icon?: string;
+  iconScale?: number;
   text?: string;
   fontSize?: string;
   tooltipItems?: TooltipItem[];
@@ -445,6 +446,7 @@ function createMenuElements(
               : COLORS.building
             : COLORS.building,
         icon: item.icon,
+        iconScale: item.unitType === UnitType.Throne ? 1.265 : undefined,
         tooltipItems: [
           { text: translateText(item.key ?? ""), className: "title" },
           {

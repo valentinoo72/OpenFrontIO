@@ -208,6 +208,7 @@ export enum UnitType {
   MIRVWarhead = "MIRV Warhead",
   Train = "Train",
   Factory = "Factory",
+  Throne = "Throne",
 }
 
 export enum TrainType {
@@ -237,15 +238,17 @@ export const Structures = unitTypeGroup([
   UnitType.MissileSilo,
   UnitType.Port,
   UnitType.Factory,
+  UnitType.Throne,
 ] as const);
 
 export const BuildMenus = unitTypeGroup([
-  ...Structures.types,
+  ...Structures.types.filter((type) => type !== UnitType.Throne),
   ...BuildableAttacks.types,
 ] as const);
 
 export const PlayerBuildable = unitTypeGroup([
   ...BuildMenus.types,
+  UnitType.Throne,
   UnitType.TransportShip,
 ] as const);
 

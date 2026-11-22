@@ -342,6 +342,7 @@ export const GameConfigSchema = z.object({
   // Stripped from gameStartInfo and from the advertised lobby config: sibling
   // ids are private lobby ids, which are join secrets.
   pool: PoolConfigSchema.optional(),
+  kingOfTheHill: z.boolean().optional(),
 });
 
 // What a host sends in update_game_config. maxPlayers is the private-lobby

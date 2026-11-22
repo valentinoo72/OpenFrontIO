@@ -611,6 +611,9 @@ export class GameImpl implements Game {
         e.tick(this._ticks);
       }
     });
+    if (this._config.isKingOfTheHill() && this._winner === null) {
+      this.checkThroneWinner();
+    }
     if (this.unInitExecs.length > 0) {
       const inited: Execution[] = [];
       const unInited: Execution[] = [];
@@ -662,6 +665,28 @@ export class GameImpl implements Game {
     if (waterChangedTiles.length > 0) this._structureVersion++;
     this._ticks++;
     return this.updates;
+  }
+
+  private checkThroneWinner(): void {
+    // Unit updates follow execution order, which also breaks a same-tick tie.
+    for (const update of this.updates[GameUpdateType.Unit]) {
+      if (
+        update.unitType !== UnitType.Throne ||
+        update.underConstruction ||
+        update.constructionEndsAt !== this._ticks
+      ) {
+        continue;
+      }
+      const throne = this.unit(update.id);
+      if (!throne?.isActive() || throne.isUnderConstruction()) continue;
+      const holder = this.owner(throne.tile());
+      if (!holder.isPlayer()) continue;
+      if (throne.owner() !== holder) holder.captureUnit(throne);
+      const team = holder.team();
+      if (team === ColoredTeams.Bot) continue;
+      this.setWinner(team ?? holder, this.stats().stats());
+      return;
+    }
   }
 
   private recordTileUpdate(tile: TileRef): void {
@@ -1182,6 +1207,11 @@ export class GameImpl implements Game {
     allPlayersStats: AllPlayersStats,
   ): void {
     this._winner = winner;
+    if (this._config.isKingOfTheHill()) {
+      for (const throne of this.units(UnitType.Throne)) {
+        if (throne.isUnderConstruction()) throne.delete(false);
+      }
+    }
     // OFM: snapshot final tiles for standings (bots skipped in recordFinalTiles).
     for (const player of this.players()) {
       this.stats().recordFinalTiles(player, player.numTilesOwned());
@@ -1222,7 +1252,9 @@ export class GameImpl implements Game {
 
   makeWinner(winner: string | Player): Winner | undefined {
     if (typeof winner === "string") {
-      const threshold = this._config.teamLandShareWinThresholdTenths();
+      const threshold = this._config.isKingOfTheHill()
+        ? 0
+        : this._config.teamLandShareWinThresholdTenths();
       return [
         "team",
         winner,

@@ -81,6 +81,7 @@ describe("createRenderer", () => {
       owner: () => ({}),
       myPlayer: () => ({}),
       config: () => ({
+        isKingOfTheHill: () => false,
         gameConfig: () => ({}),
         isReplay: () => false,
       }),

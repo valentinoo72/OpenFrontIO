@@ -726,20 +726,21 @@ export class RadialMenu implements Controller {
             .style("opacity", disabled ? 0.5 : 1)
             .text(d.data.text);
         } else {
+          const iconSize = this.config.iconSize * (d.data.iconScale ?? 1);
           const imgSel = content
             .append("image")
             .attr("xlink:href", d.data.icon!)
-            .attr("width", this.config.iconSize)
-            .attr("height", this.config.iconSize)
-            .attr("x", arc.centroid(d)[0] - this.config.iconSize / 2)
-            .attr("y", arc.centroid(d)[1] - this.config.iconSize / 2)
+            .attr("width", iconSize)
+            .attr("height", iconSize)
+            .attr("x", arc.centroid(d)[0] - iconSize / 2)
+            .attr("y", arc.centroid(d)[1] - iconSize / 2)
             .attr("opacity", disabled ? 0.5 : 1);
 
           void getSvgAspectRatio(d.data.icon!).then((aspect) => {
             if (!aspect || aspect === 1) return;
 
-            let width = this.config.iconSize;
-            let height = this.config.iconSize;
+            let width = iconSize;
+            let height = iconSize;
             const biggerLength = Math.round(width * aspect);
             if (aspect > 1) {
               width = biggerLength;

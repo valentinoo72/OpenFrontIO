@@ -7,6 +7,8 @@ import { UnitType } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { EventCollector } from "../../../../src/client/replay/codec/encode/EventCollector";
 import type { NormalizedFrame } from "../../../../src/client/replay/codec/FrameNormalizer";
+import { unitStateFromUpdate } from "../../../../src/client/view/EntityState";
+import { makeUnitUpdate } from "../../../util/viewStubs";
 
 /** A frame with a nuke landing on `impact` and a unit that died. */
 function frame(tick: number, impact: number, deadUnit: number) {
@@ -58,4 +60,22 @@ test("events are handed over once, then forgotten", () => {
   expect(next.spawnPhaseEnd).toEqual({ tick: 1, startTick: 0 });
   // What was handed over isn't touched afterwards.
   expect(first.nukeImpacts).toHaveLength(2);
+});
+
+test("a late throne update records its original construction time", () => {
+  const events = new EventCollector();
+  const snapshot = frame(600, 100, 7);
+  const throne = unitStateFromUpdate(
+    makeUnitUpdate({
+      id: 20,
+      unitType: UnitType.Throne,
+      underConstruction: true,
+      constructionEndsAt: 700,
+    }),
+  );
+  snapshot.units.push(throne);
+  events.push(snapshot, () => true);
+  expect(events.take().constructionStarts).toEqual([
+    { unitId: 20, startTick: 400 },
+  ]);
 });

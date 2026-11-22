@@ -81,7 +81,10 @@ it("recovers the open build menu after a buildables timeout", async () => {
     .mockResolvedValue(units);
   menu.game = {
     myPlayer: () => ({ buildables }),
-    config: () => ({ isUnitDisabled: () => false }),
+    config: () => ({
+      isUnitDisabled: () => false,
+      isKingOfTheHill: () => false,
+    }),
   } as any;
   menu.playerBuildables = units;
   const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -113,7 +116,10 @@ it("an older timeout cannot erase a newer successful menu refresh", async () => 
     .mockResolvedValue(units);
   menu.game = {
     myPlayer: () => ({ buildables }),
-    config: () => ({ isUnitDisabled: () => false }),
+    config: () => ({
+      isUnitDisabled: () => false,
+      isKingOfTheHill: () => false,
+    }),
   } as any;
   const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
   try {

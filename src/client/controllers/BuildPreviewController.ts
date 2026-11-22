@@ -12,6 +12,8 @@ import {
   BuildableUnit,
   bulkCost,
   Cell,
+  GameMapSize,
+  GameMapType,
   PlayerBuildableUnitType,
   Structures,
   UnitType,
@@ -20,12 +22,18 @@ import {
   listNukeBreakAlliance,
   wouldNukeBreakAlliance,
 } from "@openfront/engine-lib/execution/NukeAlliance";
+import {
+  isThronePlacementTile,
+  THRONE_COST,
+} from "@openfront/engine-lib/game/KingOfTheHill";
 import { EventBus } from "@openfront/shared/EventBus";
 import { Controller } from "../Controller";
 import {
   ConfirmGhostStructureEvent,
+  DismissHoveredThroneEvent,
   MouseMoveEvent,
   MouseUpEvent,
+  PlaceHoveredThroneEvent,
   TouchGhostPlacementDragStartEvent,
   TouchGhostPlacementEvent,
   TouchGhostPlacementMoveEvent,
@@ -33,6 +41,8 @@ import {
   ToggleStructureEvent,
 } from "../InputHandler";
 import type { MapRenderer } from "../render/gl";
+import { structureIconSizePx } from "../render/gl/utils/BuildPreviewGeometry";
+import { renderDpr } from "../render/gl/utils/Dpr";
 import {
   buildNukeTrajectory,
   type SAMInfo,
@@ -45,6 +55,8 @@ import {
 } from "../Transport";
 import { UIState } from "../UIState";
 import { UserSettings } from "../UserSettings";
+import { thronePlacementWarning } from "../utilities/ThronePlacementWarning";
+import { showToast, translateText } from "../Utils";
 import { GameView } from "../view";
 
 /** True for nuke types (AtomBomb, HydrogenBomb): ghost is preserved after placement so user can place multiple or keep selection (Enter/key confirm). */
@@ -286,6 +298,10 @@ export class BuildPreviewController implements Controller {
   // shows nothing valid until its own tile is checked.
   private touchPreviewDragged = false;
   private touchPlacementMode = false;
+  private mouseMoved = false;
+  private thronePreviewDismissed = false;
+  private throneLabel?: HTMLDivElement;
+  private cursorFrame?: number;
 
   // Buildable validation runs on the snapped tile under the cursor, but the
   // rendered icon follows the cursor at sub-tile precision so motion is
@@ -313,11 +329,25 @@ export class BuildPreviewController implements Controller {
     private transformHandler: TransformHandler,
     private view: MapRenderer,
     private userSettings: UserSettings,
+    private throneMap?: GameMapType,
+    private throneMapSize = GameMapSize.Normal,
   ) {}
 
   init() {
     this.eventBus.on(MouseMoveEvent, (e) => this.moveGhost(e));
     this.eventBus.on(MouseUpEvent, (e) => this.requestConfirmStructure(e));
+    if (this.throneMap !== undefined) {
+      this.eventBus.on(PlaceHoveredThroneEvent, this.placeHoveredThrone);
+      this.eventBus.on(DismissHoveredThroneEvent, this.dismissHoveredThrone);
+      const label = document.createElement("div");
+      label.className =
+        "fixed z-[798] pointer-events-none -translate-x-1/2 -translate-y-full rounded border border-white/10 bg-gray-800 px-2 py-1 font-sans text-xs font-medium normal-case tracking-normal text-white whitespace-nowrap";
+      label.setAttribute("role", "tooltip");
+      label.textContent = translateText("king_of_the_hill.place_throne");
+      label.hidden = true;
+      document.body.append(label);
+      this.throneLabel = label;
+    }
     this.eventBus.on(TouchGhostPlacementEvent, (e) =>
       this.handleTouchPlacement(e),
     );
@@ -355,9 +385,17 @@ export class BuildPreviewController implements Controller {
 
     const rafLoop = () => {
       this.cursorLoop();
-      requestAnimationFrame(rafLoop);
+      this.cursorFrame = requestAnimationFrame(rafLoop);
     };
-    requestAnimationFrame(rafLoop);
+    this.cursorFrame = requestAnimationFrame(rafLoop);
+  }
+
+  dispose() {
+    if (this.cursorFrame !== undefined) cancelAnimationFrame(this.cursorFrame);
+    this.eventBus.off(PlaceHoveredThroneEvent, this.placeHoveredThrone);
+    this.eventBus.off(DismissHoveredThroneEvent, this.dismissHoveredThrone);
+    this.throneLabel?.remove();
+    this.throneLabel = undefined;
   }
 
   private resetCursorCaches(): void {
@@ -371,6 +409,15 @@ export class BuildPreviewController implements Controller {
   private cursorLoop(): void {
     const ghost = this.lastGhostData;
     const traj = this.nukeTrajectoryStatic;
+    if (this.throneLabel) {
+      const visible =
+        ghost?.ghostType === UnitType.Throne && !this.touchPlacementMode;
+      this.throneLabel.hidden = !visible;
+      if (visible) {
+        this.throneLabel.style.left = `${this.mousePos.x}px`;
+        this.throneLabel.style.top = `${this.mousePos.y - this.throneLabelOffset()}px`;
+      }
+    }
     if (ghost === null && traj === null) {
       this.resetCursorCaches();
       return;
@@ -397,6 +444,18 @@ export class BuildPreviewController implements Controller {
     this.updateTrajectoryFrame(traj, w, posChanged);
     this.lastWorldX = w.x;
     this.lastWorldY = w.y;
+  }
+
+  private throneLabelOffset(): number {
+    const settings = this.view.getSettings?.().structure;
+    if (!settings) return 52;
+    const dpr = renderDpr();
+    const iconSize = structureIconSizePx(
+      settings,
+      this.transformHandler.scale * dpr,
+    );
+    const frameScale = settings.shapes[UnitType.Throne]?.scale ?? 1;
+    return (iconSize * frameScale) / (2 * dpr) + 5;
   }
 
   private updateGhostFrame(
@@ -469,8 +528,92 @@ export class BuildPreviewController implements Controller {
     return this.getTileForCoordinates(this.mousePos.x, this.mousePos.y);
   }
 
+  private canPreviewThrone(tile: TileRef | undefined): tile is TileRef {
+    if (
+      tile === undefined ||
+      this.throneMap === undefined ||
+      this.game.inSpawnPhase() ||
+      this.game.gameOver()
+    ) {
+      return false;
+    }
+    const player = this.game.myPlayer();
+    return (
+      player !== null &&
+      player.isAlive() &&
+      this.game.ownerID(tile) === player.smallID() &&
+      isThronePlacementTile(this.game, this.throneMap, tile, this.throneMapSize)
+    );
+  }
+
+  private placeHoveredThrone = (event: PlaceHoveredThroneEvent): void => {
+    if (this.uiState.ghostStructure !== null || this.thronePreviewDismissed)
+      return;
+    const tile = this.getTileForCoordinates(event.x, event.y);
+    if (!this.canPreviewThrone(tile)) return;
+    const player = this.game.myPlayer();
+    if (!player) return;
+    event.handled = true;
+    const warning = thronePlacementWarning(this.game, UnitType.Throne, tile);
+    if (warning) {
+      showToast(warning, "red", 5000);
+      return;
+    }
+    const generation = this.ghostGeneration;
+    void player
+      .buildables(tile, [UnitType.Throne])
+      .then(([throne]) => {
+        if (
+          generation === this.ghostGeneration &&
+          !this.thronePreviewDismissed &&
+          throne &&
+          throne.canBuild !== false &&
+          player.gold() >= throne.cost
+        ) {
+          this.eventBus.emit(
+            new BuildUnitIntentEvent(UnitType.Throne, throne.canBuild),
+          );
+        }
+      })
+      .catch((error) =>
+        console.warn("Failed to check throne placement:", error),
+      );
+  };
+
+  private dismissHoveredThrone = (event: DismissHoveredThroneEvent): void => {
+    if (
+      this.thronePreviewDismissed ||
+      !this.mouseMoved ||
+      this.touchPlacementMode ||
+      this.uiState.ghostStructure !== null ||
+      !this.canPreviewThrone(this.getTileForCoordinates(event.x, event.y))
+    ) {
+      return;
+    }
+
+    this.thronePreviewDismissed = true;
+    this.clearGhostStructure();
+    if (this.throneLabel) this.throneLabel.hidden = true;
+    event.handled = true;
+  };
+
   private getTileForEvent(e: MouseUpEvent): TileRef | undefined {
     return this.getTileForCoordinates(e.x, e.y);
+  }
+
+  private ghostTargetType(): PlayerBuildableUnitType | null {
+    if (this.uiState.ghostStructure !== null)
+      return this.uiState.ghostStructure;
+    if (
+      this.throneLabel &&
+      !this.thronePreviewDismissed &&
+      this.mouseMoved &&
+      !this.touchPlacementMode &&
+      this.canPreviewThrone(this.getHoveredTile())
+    ) {
+      return UnitType.Throne;
+    }
+    return null;
   }
 
   tick() {
@@ -488,6 +631,21 @@ export class BuildPreviewController implements Controller {
    * @returns true when synchronization clears a ghost selection.
    */
   private syncGhostState(): boolean {
+    if (this.thronePreviewDismissed) {
+      const tile = this.getHoveredTile();
+      if (
+        tile === undefined ||
+        this.throneMap === undefined ||
+        !isThronePlacementTile(
+          this.game,
+          this.throneMap,
+          tile,
+          this.throneMapSize,
+        )
+      ) {
+        this.thronePreviewDismissed = false;
+      }
+    }
     // A dead player keeps a ghost forever otherwise: on touch every map tap
     // is routed to it, the build bar is gone, and a nuke never cancels on an
     // invalid tap, so the radial menu is unreachable for the rest of the game.
@@ -496,7 +654,7 @@ export class BuildPreviewController implements Controller {
       this.removeGhostStructure();
       return true;
     }
-    const target = this.uiState.ghostStructure;
+    const target = this.ghostTargetType();
     const ghostType = target ?? this.ghostUnit?.buildableUnit.type;
     if (
       myPlayer &&
@@ -687,7 +845,7 @@ export class BuildPreviewController implements Controller {
         if (this.ghostUnit !== ghost || seq !== this.querySeq) {
           return;
         }
-        if (this.uiState.ghostStructure !== ghost.buildableUnit.type) {
+        if (this.ghostTargetType() !== ghost.buildableUnit.type) {
           this.syncGhostState();
           return;
         }
@@ -1010,6 +1168,22 @@ export class BuildPreviewController implements Controller {
     e: MouseUpEvent,
     endsPlacement = false,
   ): void {
+    if (this.uiState.ghostStructure === null) return;
+    const clicked = this.getTileForEvent(e);
+    const warning =
+      clicked === undefined
+        ? undefined
+        : thronePlacementWarning(
+            this.game,
+            this.uiState.ghostStructure,
+            clicked,
+          );
+    if (warning) {
+      const duration =
+        this.uiState.ghostStructure === UnitType.Throne ? 5000 : 3500;
+      showToast(warning, "red", duration);
+      return;
+    }
     this.syncGhostState();
     if (!this.ghostUnit) return;
     const ghostType = this.ghostUnit.buildableUnit.type;
@@ -1279,6 +1453,7 @@ export class BuildPreviewController implements Controller {
   }
 
   private moveGhost(e: MouseMoveEvent): void {
+    this.mouseMoved = true;
     this.touchPlacementMode = false;
     this.touchPreviewTile = null;
     this.mousePos.x = e.x;
@@ -1424,7 +1599,7 @@ export class BuildPreviewController implements Controller {
         type,
         canBuild: false,
         canUpgrade: false,
-        cost: 0n,
+        cost: type === UnitType.Throne ? THRONE_COST : 0n,
         overlappingRailroads: [],
         ghostRailPaths: [],
       },

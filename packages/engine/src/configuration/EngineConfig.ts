@@ -14,6 +14,7 @@ import { TeamCountConfig } from "@openfront/engine-api/Schemas";
 import { NukeType } from "@openfront/engine-api/StatsSchemas";
 import { Config } from "@openfront/engine-lib/configuration/Config";
 import { exp, log, pow2 } from "@openfront/engine-lib/DetMath";
+import { THRONE_COST } from "@openfront/engine-lib/game/KingOfTheHill";
 import {
   assertNever,
   sigmoid,
@@ -394,6 +395,8 @@ export class EngineConfig extends Config {
           UnitType.Factory,
           UnitType.Port,
         );
+      case UnitType.Throne:
+        return () => THRONE_COST;
       case UnitType.TransportShip:
       case UnitType.Shell:
       case UnitType.SAMMissile:

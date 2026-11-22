@@ -39,6 +39,7 @@ export class MapPicker extends LitElement {
   @property({ type: Boolean }) showMedals = false;
   @property({ type: Boolean }) randomMapDivider = false;
   @property({ type: String }) searchQuery = "";
+  @property({ attribute: false }) allowedMaps?: readonly GameMapType[];
   @property({ attribute: false }) mapWins: Map<GameMapType, Set<Difficulty>> =
     new Map();
   @property({ attribute: false }) onSelectMap?: (map: GameMapType) => void;
@@ -333,6 +334,19 @@ export class MapPicker extends LitElement {
   }
 
   render() {
+    if (this.allowedMaps) {
+      const query = this.searchQuery.trim().toLowerCase();
+      return this.renderMapGrid(
+        this.allowedMaps.flatMap((type) => {
+          const map = maps.find((map) => map.type === type);
+          return map &&
+            (!query ||
+              translateText(map.translationKey).toLowerCase().includes(query))
+            ? [map]
+            : [];
+        }),
+      );
+    }
     const isSearching = this.searchQuery.trim().length > 0;
     return html`
       <div class="space-y-8">
