@@ -763,9 +763,14 @@ export class MapPlaylist {
     return maps;
   }
 
-  private getTeamCount(map: GameMapType, humansOnly = false): TeamCountConfig {
-    // Override team count for specific maps
-    const forcedTeamCount = SPECIAL_TEAM_MAPS.get(map);
+  private getTeamCount(
+    map: GameMapType,
+    kingOfTheHill = false,
+  ): TeamCountConfig {
+    // Ordinary lobbies can prefer a fixed team count on certain maps.
+    const forcedTeamCount = kingOfTheHill
+      ? undefined
+      : SPECIAL_TEAM_MAPS.get(map);
     if (
       forcedTeamCount !== undefined &&
       Math.random() < SPECIAL_TEAM_FORCE_CHANCE
@@ -773,7 +778,7 @@ export class MapPlaylist {
       return forcedTeamCount;
     }
 
-    const weights = humansOnly
+    const weights = kingOfTheHill
       ? TEAM_WEIGHTS.filter(({ config }) => config !== HumansVsNations)
       : TEAM_WEIGHTS;
     const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);

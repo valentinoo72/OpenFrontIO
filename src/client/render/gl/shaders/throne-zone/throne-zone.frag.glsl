@@ -2,5 +2,5 @@
 precision highp float;
 out vec4 fragColor;
 void main() {
-  fragColor = vec4(1.0, 0.839, 0.373, 0.68);
+  fragColor = vec4(1.0, 0.86, 0.27, 0.76);
 }

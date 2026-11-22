@@ -1,9 +1,12 @@
 import {
+  Duos,
   GameMapSize,
   GameMapType,
   GameMode,
   HumansVsNations,
   PublicGameModifiers,
+  Quads,
+  Trios,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { GameConfig } from "@openfront/engine-api/Schemas";
@@ -25,7 +28,7 @@ type Internals = {
     count?: number,
     reduction?: number,
   ): PublicGameModifiers & { isKingOfTheHill?: boolean };
-  getTeamCount(map: GameMapType, humansOnly?: boolean): number | string;
+  getTeamCount(map: GameMapType, kingOfTheHill?: boolean): number | string;
 };
 const internal = (p: MapPlaylist) => p as unknown as Internals;
 afterEach(() => vi.restoreAllMocks());
@@ -65,9 +68,18 @@ describe("KOTH public rotation", () => {
       if (i % 2 === 0) expect(c.maxPlayers).toBeLessThanOrEqual(25);
     }
     expect(modes).toEqual(new Set([GameMode.FFA, GameMode.Team]));
-    expect(modifiers.has("startingGold")).toBe(true);
-    expect(modifiers.has("isCompact")).toBe(true);
-    expect(modifiers.has("isSAMsDisabled")).toBe(true);
+    expect(modifiers).toEqual(
+      new Set([
+        "goldMultiplier",
+        "isAlliancesDisabled",
+        "isCompact",
+        "isCrowded",
+        "isPeaceTime",
+        "isRandomSpawn",
+        "isSAMsDisabled",
+        "startingGold",
+      ]),
+    );
     for (const [excluded] of picker.mock.calls)
       expect(excluded).toEqual(
         expect.arrayContaining([
@@ -144,12 +156,30 @@ describe("KOTH public rotation", () => {
     },
   );
 
-  it("excludes Humans vs Nations from the ordinary weighted team selection", () => {
+  it("uses the default team weights without Humans vs Nations or map overrides", () => {
     const p = internal(new MapPlaylist());
-    for (let i = 0; i < 100; i++) {
-      const random = vi.spyOn(Math, "random").mockReturnValue((i + 0.5) / 100);
-      expect(p.getTeamCount(GameMapType.Luna, true)).not.toBe(HumansVsNations);
-      random.mockRestore();
+    const random = vi.spyOn(Math, "random");
+    const counts = new Map<number | string, number>();
+    // Surrounded ordinarily forces four teams on 75% of rolls.
+    random.mockReturnValue(0.01);
+    expect(p.getTeamCount(GameMapType.Surrounded)).toBe(4);
+    for (let i = 0; i < 800; i++) {
+      random.mockReturnValue((i + 0.5) / 800);
+      const teams = p.getTeamCount(GameMapType.Surrounded, true);
+      counts.set(teams, (counts.get(teams) ?? 0) + 1);
     }
+    expect(counts).toEqual(
+      new Map<number | string, number>([
+        [2, 100],
+        [3, 100],
+        [4, 100],
+        [5, 100],
+        [6, 100],
+        [7, 100],
+        [Duos, 50],
+        [Trios, 75],
+        [Quads, 75],
+      ]),
+    );
   });
 });

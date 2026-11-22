@@ -102,22 +102,25 @@ describe("KOTH core alerts", () => {
     vi.useRealTimers();
   });
   it.each([
-    [1, "own", "Your throne"],
-    [2, "teammate", "Team throne"],
-    [3, "enemy", "Enemy throne"],
-  ] as const)("shows the current owner relation %s", async (id, key, label) => {
-    owner = id;
-    hud.tick();
-    await hud.updateComplete;
-    const banner = hud.querySelector(`[data-throne-alert="${key}"]`)!;
-    expect(banner.textContent?.trim()).toMatch(new RegExp(`^${label}\\s+·`));
-    expect(banner.querySelector("strong")?.textContent?.trim()).toBe(
-      "20s to win",
-    );
-    expect(banner.className).toContain(
-      key === "enemy" ? "border-red" : "border-green",
-    );
-  });
+    [1, "own", "YOU PLACED A THRONE.", "20s until you win"],
+    [2, "teammate", "YOUR TEAM PLACED A THRONE.", "20s until you win"],
+    [3, "enemy", "ENEMY PLACED A THRONE.", "20s until they win"],
+  ] as const)(
+    "shows the current owner relation %s",
+    async (id, key, label, timer) => {
+      owner = id;
+      hud.tick();
+      await hud.updateComplete;
+      const banner = hud.querySelector(`[data-throne-alert="${key}"]`)!;
+      expect(banner.textContent?.replace(/\s+/g, " ").trim()).toBe(
+        `${label} ${timer}`,
+      );
+      expect(banner.querySelector("strong")?.textContent?.trim()).toBe(timer);
+      expect(banner.className).toContain(
+        key === "enemy" ? "border-red" : "border-green",
+      );
+    },
+  );
   it("switches ownership wording on capture without restarting the timer", async () => {
     hud.tick();
     await hud.updateComplete;
@@ -128,7 +131,7 @@ describe("KOTH core alerts", () => {
     await hud.updateComplete;
     const captured = hud.querySelector('[data-throne-alert="own"]');
     expect(captured).toBe(original);
-    expect(captured?.textContent).toContain("20s to win");
+    expect(captured?.textContent).toContain("20s until you win");
     ended = true;
     hud.tick();
     await hud.updateComplete;
@@ -147,7 +150,7 @@ describe("KOTH core alerts", () => {
       const messages = hud.querySelector("[data-openfront-messages]")!;
       const instructions = messages.querySelector("[data-koth-description]")!;
       expect(instructions.textContent?.trim()).toBe(
-        "Finish building a throne in the highlighted area to win.",
+        "Place a throne on the highlighted area to win.",
       );
       expect(instructions).toBe(messages.firstElementChild);
       expect(instructions.nextElementSibling?.textContent).toContain(
@@ -253,6 +256,7 @@ describe("KOTH core alerts", () => {
       throne(11, 1, 50),
       throne(12, 2, 100),
       throne(13, 4, 150),
+      throne(14, 1, 200),
     ];
     hud.tick();
     await hud.updateComplete;
@@ -328,7 +332,7 @@ describe("KOTH core alerts", () => {
     hud.tick();
     await hud.updateComplete;
     expect(hud.querySelector('[data-throne-id="12"]')?.textContent).toContain(
-      "19s to win",
+      "19s until you win",
     );
   });
   function visibleRows() {
