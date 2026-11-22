@@ -22,7 +22,7 @@ import { ConstructionExecution } from "@openfront/engine/execution/ConstructionE
 import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { createGameRunner } from "@openfront/engine/GameRunner";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { applyGameConfigPatch } from "../../../src/server/ConfigPatch";
 import { kothFiles } from "../../util/kothMaps";
 
@@ -111,63 +111,116 @@ describe("KOTH core", () => {
     expect(player.numTilesOwned()).toBe(land);
   });
 
-  it.each([
-    [false, GameMode.FFA],
-    [false, GameMode.Team],
-    [true, GameMode.FFA],
-    [true, GameMode.Team],
-  ] as const)(
-    "requires a throne at 100 percent land before hosted Overtime begins (overtime=%s, mode=%s)",
-    async (overtime, gameMode) => {
-      const c = config({
+  describe.each([GameMode.FFA, GameMode.Team])(
+    "land wins in %s",
+    (gameMode) => {
+      it.each([
+        {
+          description:
+            "public rotation stays throne-only even with land options present",
+          gameType: GameType.Public,
+          overtime: true,
+          threshold: 650,
+          ownedTiles: 400,
+          winAt: null,
+        },
+        {
+          description: "hosted defaults require a throne",
           gameType: GameType.Private,
-          gameMode,
-          playerTeams: gameMode === GameMode.Team ? 2 : undefined,
-          overtime: { enabled: overtime, startMinutes: 1 },
-        }),
-        files = kothFiles(c.gameMap);
-      files.manifest.map = {
-        ...files.manifest.map,
-        width: 20,
-        height: 20,
-        num_land_tiles: 400,
-      };
-      files.manifest.map4x = {
-        ...files.manifest.map4x,
-        width: 10,
-        height: 10,
-        num_land_tiles: 100,
-      };
-      files.mapBin = new Uint8Array(400).fill(0x80);
-      files.map4xBin = new Uint8Array(100).fill(0x80);
-      const start: GameStartInfo = {
-        gameID: "koth-land",
-        lobbyCreatedAt: 0,
-        config: c,
-        players: [{ clientID: "human", username: "Human", clanTag: null }],
-      };
-      const { game } = await createGameRunner(
-        start,
-        undefined,
-        files,
-        () => {},
+          overtime: false,
+          threshold: null,
+          ownedTiles: 400,
+          winAt: null,
+        },
+        {
+          description: "hosted Overtime unlocks a land win when it starts",
+          gameType: GameType.Private,
+          overtime: true,
+          threshold: null,
+          ownedTiles: 400,
+          winAt: "overtime",
+        },
+        {
+          description: "a host can enable a custom land win before Overtime",
+          gameType: GameType.Private,
+          overtime: false,
+          threshold: 650,
+          ownedTiles: 280,
+          winAt: "land",
+        },
+        {
+          description:
+            "the sim time cutoff does not award a hosted win below the host's land percentage",
+          gameType: GameType.Private,
+          overtime: false,
+          threshold: 900,
+          ownedTiles: 280,
+          winAt: null,
+        },
+      ] as const)(
+        "$description",
+        async ({ gameType, overtime, threshold, ownedTiles, winAt }) => {
+          const c = config({
+            gameType,
+            gameMode,
+            playerTeams: gameMode === GameMode.Team ? 2 : undefined,
+            overtime: { enabled: overtime, startMinutes: 1 },
+            winThresholdTenths: threshold,
+          });
+          const files = kothFiles(c.gameMap);
+          files.manifest.map = {
+            ...files.manifest.map,
+            width: 20,
+            height: 20,
+            num_land_tiles: 400,
+          };
+          files.manifest.map4x = {
+            ...files.manifest.map4x,
+            width: 10,
+            height: 10,
+            num_land_tiles: 100,
+          };
+          files.mapBin = new Uint8Array(400).fill(0x80);
+          files.map4xBin = new Uint8Array(100).fill(0x80);
+          const start: GameStartInfo = {
+            gameID: "koth-land",
+            lobbyCreatedAt: 0,
+            config: c,
+            listed: gameType === GameType.Private || undefined,
+            players: [{ clientID: "human", username: "Human", clanTag: null }],
+          };
+          const { game } = await createGameRunner(
+            start,
+            undefined,
+            files,
+            () => {},
+          );
+          game.executeNextTick();
+          game.executeNextTick();
+          game.endSpawnPhase();
+          const player = game.allPlayers()[0];
+          for (let tile = 0; tile < ownedTiles; tile++) player.conquer(tile);
+          for (let i = 0; i < 30; i++) game.executeNextTick();
+          const winner = gameMode === GameMode.Team ? player.team() : player;
+          if (winAt === "land") {
+            expect(game.getWinner()).toBe(winner);
+            return;
+          }
+          expect(game.getWinner()).toBeNull();
+          while (game.elapsedGameSeconds() < 59) game.executeNextTick();
+          expect(game.getWinner()).toBeNull();
+          for (let i = 0; i < 40; i++) game.executeNextTick();
+          expect(game.getWinner()).toBe(winAt === "overtime" ? winner : null);
+          if (winAt === null) {
+            const clock = vi
+              .spyOn(game, "elapsedGameSeconds")
+              .mockReturnValue(170 * 60);
+            for (let i = 0; i < 10; i++) game.executeNextTick();
+            clock.mockRestore();
+            expect(game.getWinner()).toBeNull();
+          }
+        },
       );
-      game.executeNextTick();
-      game.executeNextTick();
-      game.endSpawnPhase();
-      const player = game.allPlayers()[0];
-      for (let tile = 0; tile < 400; tile++) player.conquer(tile);
-      for (let i = 0; i < 30; i++) game.executeNextTick();
-      expect(player.numTilesOwned()).toBe(400);
-      expect(game.getWinner()).toBeNull();
-      if (overtime) {
-        while (game.elapsedGameSeconds() < 59) game.executeNextTick();
-        expect(game.getWinner()).toBeNull();
-        for (let i = 0; i < 40; i++) game.executeNextTick();
-        expect(game.getWinner()).toBe(
-          gameMode === GameMode.Team ? player.team() : player,
-        );
-      }
     },
   );
 

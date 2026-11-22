@@ -1,6 +1,7 @@
 import {
   ColoredTeams,
   GameMode,
+  GameType,
   PlayerType,
   RankedType,
   Team,
@@ -33,34 +34,39 @@ export class WinCheckExecution implements Execution {
     }
     if (this.mg === null) throw new Error("Not initialized");
 
-    if (this.mg.config().isKingOfTheHill()) {
-      // Public KOTH has no automatic land/time winner. An explicit host time
-      // limit can end it without a winner, using the ordinary loss screen.
-      const limit = this.mg.config().gameConfig().maxTimerValue;
+    const config = this.mg.config();
+    if (config.isKingOfTheHill()) {
       if (this.mg.getWinner() !== null) {
         this.active = false;
         return;
       }
-      if (limit && this.mg.elapsedGameSeconds() >= limit * 60) {
+      const { gameType, maxTimerValue, winThresholdTenths } =
+        config.gameConfig();
+      // Public rotation is won by completing a throne. A hosted lobby
+      // can opt in to land victory even when it is publicly listed.
+      if (gameType !== GameType.Private) return;
+
+      const elapsed = this.mg.elapsedGameSeconds();
+      // A host time limit ends KOTH without awarding a victory.
+      if (maxTimerValue && elapsed >= maxTimerValue * 60) {
         this.mg.setWinner(null, this.mg.stats().stats());
         this.active = false;
         return;
       }
-      // Only an explicit host Overtime setting enables the normal land
-      // threshold once overtime begins. Automatic KOTH never rolls Overtime.
-      const overtime = this.mg.config().overtimeConfig();
+      const overtime = config.overtimeConfig();
       if (
-        !overtime.enabled ||
-        this.mg.elapsedGameSeconds() < overtime.startMinutes * 60
-      )
+        typeof winThresholdTenths !== "number" &&
+        (!overtime.enabled || elapsed < overtime.startMinutes * 60)
+      ) {
         return;
+      }
     }
 
     if (this.checkRankedTeamCancelled()) {
       return;
     }
 
-    if (this.mg.config().gameConfig().gameMode === GameMode.FFA) {
+    if (config.gameConfig().gameMode === GameMode.FFA) {
       this.checkWinnerFFA();
     } else {
       this.checkWinnerTeam();
@@ -169,7 +175,10 @@ export class WinCheckExecution implements Execution {
     ) {
       return true;
     }
-    if (timeElapsed >= WinCheckExecution.HARD_TIME_LIMIT_SECONDS) {
+    if (
+      timeElapsed >= WinCheckExecution.HARD_TIME_LIMIT_SECONDS &&
+      !this.mg.config().isKingOfTheHill()
+    ) {
       return true;
     }
     const numTilesWithoutFallout =
