@@ -1072,7 +1072,6 @@ export class GPURenderer {
     this.worldTextPass.setGhostCostLabel(
       data && (showCost || topText !== undefined)
         ? {
-            ghostType: data.ghostType,
             tileX: data.tileX,
             tileY: data.tileY,
             cost: showCost ? data.cost : 0,

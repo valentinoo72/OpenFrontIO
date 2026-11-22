@@ -1787,7 +1787,7 @@
     "own_throne": "YOU PLACED A THRONE.",
     "place_throne": "Place Throne",
     "seconds": "{seconds}s",
-    "spawn_blocked": "You can't spawn on the throne site.",
+    "spawn_blocked": "You can't spawn on the throne placement area.",
     "structure_blocked": "You can't place a {structure} on the throne placement area",
     "team_instructions": "Win the game by successfully placing a throne on the highlighted area. Thrones takes 2 million gold to place and 30 seconds to build.",
     "teammate_throne": "YOUR TEAM PLACED A THRONE.",
