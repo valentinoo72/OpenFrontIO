@@ -115,7 +115,12 @@ describe("KOTH core alerts", () => {
       expect(banner.textContent?.replace(/\s+/g, " ").trim()).toBe(
         `${label} ${timer}`,
       );
-      expect(banner.querySelector("strong")?.textContent?.trim()).toBe(timer);
+      expect(banner.querySelector("strong")?.textContent?.trim()).toBe(label);
+      expect(
+        banner
+          .querySelector("span.font-normal.tabular-nums")
+          ?.textContent?.trim(),
+      ).toBe(timer);
       expect(banner.className).toContain(
         key === "enemy" ? "border-red" : "border-green",
       );

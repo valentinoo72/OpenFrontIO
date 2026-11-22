@@ -345,15 +345,15 @@ export class HeadsUpMessage extends LitElement implements Controller {
       }"
       style="background: color-mix(in srgb, var(--color-gray-800), var(${enemy ? "--color-red-500" : "--color-green-500"}) 25%);"
     >
-      ${translateText(`king_of_the_hill.${key}_throne`)}
-      <strong class="tabular-nums">
+      <strong>${translateText(`king_of_the_hill.${key}_throne`)}</strong>
+      <span class="font-normal tabular-nums">
         ${translateText(
           enemy
             ? "king_of_the_hill.enemy_throne_win_timer"
             : "king_of_the_hill.throne_win_timer",
           { timer },
         )}
-      </strong>
+      </span>
     </div>`;
   }
 
