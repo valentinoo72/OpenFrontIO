@@ -1,5 +1,5 @@
 import { TileRef } from "@openfront/engine-api/game/GameMap";
-import { UnitType } from "@openfront/engine-api/game/GameTypes";
+import { GameMapType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import { EventBus } from "@openfront/shared/EventBus";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,6 +22,7 @@ vi.mock("../../src/client/InGameModal", () => ({
 }));
 vi.mock("../../src/client/Utils", () => ({
   translateText: (key: string) => key,
+  showToast: vi.fn(),
   reloadForUpdate: vi.fn(),
   createCanvas: () => document.createElement("canvas"),
   homeHref: () => "/",
@@ -88,6 +89,8 @@ import {
   SendTargetPlayerIntentEvent,
 } from "../../src/client/Transport";
 
+import { showToast } from "../../src/client/Utils";
+
 const startedRunners: ClientGameRunner[] = [];
 
 const TILE = 77 as TileRef;
@@ -97,6 +100,7 @@ const CLICK = { x: 10, y: 20 };
 function makeRunner(overrides: {
   inSpawnPhase?: boolean;
   hasOwner?: boolean;
+  koth?: boolean;
   playerByClientID?: () => unknown;
   actions?: Record<string, unknown>;
   boatDistSquared?: number;
@@ -110,13 +114,19 @@ function makeRunner(overrides: {
     config: () => ({
       isRandomSpawn: () => false,
       isReplay: () => false,
-      isKingOfTheHill: () => false,
+      isKingOfTheHill: () => overrides.koth ?? false,
+      gameConfig: () => ({ gameMap: GameMapType.IrishSea }),
     }),
     isCatchingUp: () => false,
     inSpawnPhase: () => overrides.inSpawnPhase ?? false,
     myPlayer: () => null,
     isValidCoord: () => true,
     ref: () => TILE,
+    isValidRef: () => true,
+    x: () => 778,
+    y: () => 727,
+    bfs: () => new Set([TILE]),
+    isImpassable: () => false,
     isLand: () => true,
     hasOwner: () => overrides.hasOwner ?? false,
     owner: () => ({ id: () => "enemy1" }),
@@ -176,6 +186,29 @@ describe("left click", () => {
     expect(spawns).toHaveLength(1);
     expect(spawns[0].tile).toBe(TILE);
   });
+
+  it.each([false, true])(
+    "warns on a manual spawn click in a throne zone (occupied: %s)",
+    (hasOwner) => {
+      const { eventBus } = makeRunner({
+        inSpawnPhase: true,
+        hasOwner,
+        koth: true,
+      });
+      const spawn = vi.fn();
+      vi.mocked(showToast).mockClear();
+      eventBus.on(SendSpawnIntentEvent, spawn);
+
+      eventBus.emit(new MouseUpEvent(CLICK.x, CLICK.y));
+
+      expect(showToast).toHaveBeenCalledWith(
+        "king_of_the_hill.spawn_blocked",
+        "red",
+        3500,
+      );
+      expect(spawn).not.toHaveBeenCalled();
+    },
+  );
 
   it("lazily resolves myPlayer by clientID and emits an attack intent", async () => {
     const { eventBus, gameView } = makeRunner({

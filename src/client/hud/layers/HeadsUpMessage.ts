@@ -20,7 +20,7 @@ const OPENFRONT_MESSAGE_CLASSES =
 type ThroneAlert = {
   id: number;
   end: number;
-  key: "own" | "teammate" | "enemy";
+  key: "own" | "teammate" | "enemy" | "spectator";
 };
 type KothGameNotice = "pregame" | "pause" | "immunity" | "overtime" | "spawn";
 type KothNoticeKey = number | "toast" | KothGameNotice;
@@ -301,21 +301,27 @@ export class HeadsUpMessage extends LitElement implements Controller {
   }
 
   private closestThroneAlerts(): ThroneAlert[] {
-    const player = this.game.myPlayer();
-    const closest = new Map<"friendly" | "enemy", ThroneAlert>();
+    const config = this.game.config();
+    const player =
+      config.isIntentionalSpectator() || config.isReplay()
+        ? null
+        : this.game.myPlayer();
+    const isTeamGame = config.gameConfig().gameMode === GameMode.Team;
+    const closest = new Map<"friendly" | "enemy" | "spectator", ThroneAlert>();
     for (const throne of this.game.units(UnitType.Throne)) {
       const start = throne.state.constructionStartTick;
       if (!throne.isActive() || !throne.isUnderConstruction() || start === null)
         continue;
       const owner = throne.owner();
       const key =
-        owner.smallID() === player?.smallID()
-          ? "own"
-          : this.game.config().gameConfig().gameMode === GameMode.Team &&
-              player?.isOnSameTeam(owner)
-            ? "teammate"
-            : "enemy";
-      const side = key === "enemy" ? "enemy" : "friendly";
+        player === null
+          ? "spectator"
+          : owner.smallID() === player.smallID()
+            ? "own"
+            : isTeamGame && player.isOnSameTeam(owner)
+              ? "teammate"
+              : "enemy";
+      const side = key === "own" || key === "teammate" ? "friendly" : key;
       const candidate: ThroneAlert = {
         id: throne.id(),
         end: start + THRONE_BUILD_TICKS,
@@ -336,23 +342,31 @@ export class HeadsUpMessage extends LitElement implements Controller {
     const timer = translateText("king_of_the_hill.seconds", {
       seconds: Math.max(0, Math.ceil((end - this.game.ticks()) / 10)),
     });
+    const spectator = key === "spectator";
     const enemy = key === "enemy";
+    const background = spectator
+      ? "var(--color-gray-800)"
+      : `color-mix(in srgb, var(--color-gray-800), var(${enemy ? "--color-red-500" : "--color-green-500"}) 25%)`;
+    const timerKey = spectator
+      ? "king_of_the_hill.spectator_throne_countdown"
+      : enemy
+        ? "king_of_the_hill.enemy_throne_win_timer"
+        : "king_of_the_hill.throne_win_timer";
     return html`<div
       data-throne-alert=${key}
       data-throne-id=${id}
       class="w-fit min-w-0 max-w-full rounded-md border px-3 py-2 text-center font-sans text-sm wrap-anywhere leading-snug text-white lg:rounded-lg lg:text-base ${
-        enemy ? "border-red-500/30" : "border-green-500/30"
+        spectator
+          ? "border-white/20"
+          : enemy
+            ? "border-red-500/30"
+            : "border-green-500/30"
       }"
-      style="background: color-mix(in srgb, var(--color-gray-800), var(${enemy ? "--color-red-500" : "--color-green-500"}) 25%);"
+      style="background: ${background};"
     >
       <strong>${translateText(`king_of_the_hill.${key}_throne`)}</strong>
       <span class="font-normal tabular-nums">
-        ${translateText(
-          enemy
-            ? "king_of_the_hill.enemy_throne_win_timer"
-            : "king_of_the_hill.throne_win_timer",
-          { timer },
-        )}
+        ${translateText(timerKey, { timer })}
       </span>
     </div>`;
   }

@@ -1415,13 +1415,9 @@ export class ClientGameRunner {
     }
     console.log(`clicked cell ${cell}`);
     const tile = this.gameView.ref(cell.x, cell.y);
-    if (
-      this.gameView.isLand(tile) &&
-      !this.gameView.hasOwner(tile) &&
-      this.gameView.inSpawnPhase() &&
-      !this.gameView.config().isRandomSpawn()
-    ) {
+    if (this.gameView.inSpawnPhase()) {
       const config = this.gameView.config();
+      if (config.isRandomSpawn() || !this.gameView.isLand(tile)) return;
       if (
         config.isKingOfTheHill() &&
         isThronePlacementTile(
@@ -1434,10 +1430,9 @@ export class ClientGameRunner {
         showToast(translateText("king_of_the_hill.spawn_blocked"), "red", 3500);
         return;
       }
-      this.eventBus.emit(new SendSpawnIntentEvent(tile));
-      return;
-    }
-    if (this.gameView.inSpawnPhase()) {
+      if (!this.gameView.hasOwner(tile)) {
+        this.eventBus.emit(new SendSpawnIntentEvent(tile));
+      }
       return;
     }
     if (this.myPlayer === null) {

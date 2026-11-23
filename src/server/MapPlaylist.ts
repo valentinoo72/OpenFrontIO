@@ -266,6 +266,7 @@ export class MapPlaylist {
           "isNukesDisabled",
           "isWaterNukes",
           "isHardNations",
+          "startingGold25M",
           "isDoomsdayClock",
         ]
       : [];
@@ -805,10 +806,14 @@ export class MapPlaylist {
       modifierCounts[Math.floor(Math.random() * modifierCounts.length)];
     const k = Math.max(0, (count ?? rolled) - countReduction);
 
-    // Shuffle the pool, then pick the first k unique modifier keys.
+    // Give each eligible ticket an equal chance at every position.
     const pool = SPECIAL_MODIFIER_POOL.filter(
       (key) => !excludedModifiers.includes(key),
-    ).sort(() => Math.random() - 0.5);
+    );
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
 
     const selected = new Set<ModifierKey>();
     for (const key of pool) {

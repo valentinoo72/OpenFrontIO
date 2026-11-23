@@ -38,6 +38,31 @@ const internal = (p: MapPlaylist) => p as unknown as Internals;
 afterEach(() => vi.restoreAllMocks());
 
 describe("KOTH public rotation", () => {
+  it("honors each eligible ticket's weight when picking one bonus", () => {
+    const p = internal(new MapPlaylist());
+    const random = new PseudoRandom(73);
+    vi.spyOn(Math, "random").mockImplementation(() => random.next());
+    const incompatible = [
+      "isKingOfTheHill",
+      "isCrowded",
+      "isNukesDisabled",
+      "isWaterNukes",
+      "isHardNations",
+      "startingGold25M",
+      "isDoomsdayClock",
+    ];
+    const tries = 30_000;
+    let randomSpawn = 0;
+    let goldMultiplier = 0;
+    for (let i = 0; i < tries; i++) {
+      const modifiers = p.getRandomSpecialGameModifiers(incompatible, 1);
+      if (modifiers.isRandomSpawn) randomSpawn++;
+      if (modifiers.goldMultiplier) goldMultiplier++;
+    }
+    expect(Math.abs(randomSpawn / tries - 4 / 23)).toBeLessThan(0.01);
+    expect(Math.abs(goldMultiplier / tries - 6 / 23)).toBeLessThan(0.01);
+  });
+
   it("uses the ordinary modifier picker with KOTH-specific exclusions", async () => {
     const p = internal(new MapPlaylist());
     const picker = vi.spyOn(p, "getRandomSpecialGameModifiers");
@@ -57,9 +82,10 @@ describe("KOTH public rotation", () => {
       expect(c.overtime).toBeUndefined();
       if (typeof c.startingGold === "number")
         startingGoldTiers.add(c.startingGold);
-      if (c.startingGold === 25_000_000) {
+      expect(c.startingGold).not.toBe(25_000_000);
+      if (c.startingGold === 5_000_000) {
         expect(c.spawnImmunityDuration).toBe(
-          c.publicGameModifiers?.isPeaceTime ? 2400 : 1500,
+          c.publicGameModifiers?.isPeaceTime ? 2400 : 450,
         );
       }
       for (const u of [
@@ -79,9 +105,7 @@ describe("KOTH public rotation", () => {
       if (i % 2 === 0) expect(c.maxPlayers).toBeLessThanOrEqual(25);
     }
     expect(modes).toEqual(new Set([GameMode.FFA, GameMode.Team]));
-    expect(startingGoldTiers).toEqual(
-      new Set([1_000_000, 5_000_000, 25_000_000]),
-    );
+    expect(startingGoldTiers).toEqual(new Set([1_000_000, 5_000_000]));
     expect(modifiers).toEqual(
       new Set([
         "goldMultiplier",
@@ -101,9 +125,26 @@ describe("KOTH public rotation", () => {
           "isNukesDisabled",
           "isWaterNukes",
           "isHardNations",
+          "startingGold25M",
           "isDoomsdayClock",
         ]),
       );
+  });
+
+  it("still rolls 25M in ordinary Special games", async () => {
+    const p = internal(new MapPlaylist());
+    p.playlists.specialFfa = Array<GameMapType>(200).fill(GameMapType.Europe);
+    const random = new PseudoRandom(57);
+    vi.spyOn(Math, "random").mockImplementation(() => random.next());
+
+    const configs: GameConfig[] = [];
+    for (let i = 0; i < 200; i++) {
+      configs.push(await p.getSpecialConfig(false, false, GameMode.FFA));
+    }
+
+    expect(
+      configs.some((c) => !c.kingOfTheHill && c.startingGold === 25_000_000),
+    ).toBe(true);
   });
 
   it("selects KOTH as a mode and rerolls all three modifier slots normally", async () => {

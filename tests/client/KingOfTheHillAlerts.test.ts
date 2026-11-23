@@ -12,6 +12,8 @@ describe("KOTH core alerts", () => {
   let koth = true;
   let owner = 3;
   let spawning = false;
+  let spectating = false;
+  let replaying = false;
   let randomSpawn = false;
   let extendedImmunity = false;
   let spawnImmune = false;
@@ -39,6 +41,8 @@ describe("KOTH core alerts", () => {
     koth = true;
     owner = 3;
     spawning = false;
+    spectating = false;
+    replaying = false;
     randomSpawn = false;
     extendedImmunity = false;
     spawnImmune = false;
@@ -68,8 +72,8 @@ describe("KOTH core alerts", () => {
       config: () => ({
         isKingOfTheHill: () => koth,
         isRandomSpawn: () => randomSpawn,
-        isReplay: () => false,
-        isIntentionalSpectator: () => false,
+        isReplay: () => replaying,
+        isIntentionalSpectator: () => spectating,
         gameConfig: () => ({
           gameMode: mode,
           gameType,
@@ -123,6 +127,24 @@ describe("KOTH core alerts", () => {
       ).toBe(timer);
       expect(banner.className).toContain(
         key === "enemy" ? "border-red" : "border-green",
+      );
+    },
+  );
+  it.each(["spectator", "replay"])(
+    "shows a neutral countdown for the next throne to finish in a %s view",
+    async (view) => {
+      spectating = view === "spectator";
+      replaying = view === "replay";
+      thrones = [throne(11, 1, 80), throne(12, 3, 0)];
+      hud.tick();
+      await hud.updateComplete;
+
+      const alerts = hud.querySelectorAll("[data-throne-alert]");
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0].getAttribute("data-throne-id")).toBe("12");
+      expect(alerts[0].getAttribute("data-throne-alert")).toBe("spectator");
+      expect(alerts[0].textContent?.replace(/\s+/g, " ").trim()).toBe(
+        "A PLAYER PLACED A THRONE. 20s until completion",
       );
     },
   );
