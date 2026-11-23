@@ -1778,12 +1778,12 @@
     "choose_spawn_outside": "Choose a starting location outside the highlighted areas.",
     "enemy_throne": "ENEMY PLACED A THRONE.",
     "enemy_throne_win_timer": "{timer} until they win",
-    "humans_vs_nations_blocked": "Humans vs Nations can't be used with King of the Hill.",
+    "humans_vs_nations_blocked": "Humans vs Nations can't be used with Throne Mode.",
     "immunity_blocked": "You can't place a throne during PvP immunity.",
     "instructions": "Place a throne on the highlighted area to win.",
-    "maps": "King of the Hill maps",
-    "name": "King of the Hill",
-    "nations_blocked": "Nations can't be used with King of the Hill.",
+    "maps": "Throne Mode maps",
+    "name": "Throne Mode",
+    "nations_blocked": "Nations can't be used with Throne Mode.",
     "own_throne": "YOU PLACED A THRONE.",
     "place_throne": "Place Throne",
     "seconds": "{seconds}s",
@@ -1794,7 +1794,7 @@
     "team_instructions": "Win the game by successfully placing a throne on the highlighted area. Thrones takes 2 million gold to place and 30 seconds to build.",
     "teammate_throne": "YOUR TEAM PLACED A THRONE.",
     "throne_win_timer": "{timer} until you win",
-    "water_nukes_blocked": "Water Nukes can't be used with King of the Hill."
+    "water_nukes_blocked": "Water Nukes can't be used with Throne Mode."
   },
   "lang": {
     "en": "English",
