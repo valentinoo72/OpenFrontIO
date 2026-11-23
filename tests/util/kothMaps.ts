@@ -12,6 +12,10 @@ export const kothMaps = [
   [GameMapType.Luna, "luna", [656, 1750]],
   [GameMapType.TradersDream, "tradersdream", [1100, 960]],
   [GameMapType.Sol, "sol", [2216, 1050]],
+  [GameMapType.IrishSea, "irishsea", [778, 727]],
+  [GameMapType.Sierpinski, "sierpinski", [233, 233]],
+  [GameMapType.Conakry, "conakry", [1271, 916]],
+  [GameMapType.Levant, "levant", [985, 958]],
 ] as const;
 
 export function kothFiles(

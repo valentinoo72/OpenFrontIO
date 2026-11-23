@@ -22,7 +22,11 @@ type Internals = {
     specialFfa: GameMapType[];
     specialTeam: GameMapType[];
   };
-  getSpecialConfig(trusted: boolean, koth?: boolean): Promise<GameConfig>;
+  getSpecialConfig(
+    trusted: boolean,
+    koth?: boolean,
+    mode?: GameMode,
+  ): Promise<GameConfig>;
   getRandomSpecialGameModifiers(
     excluded?: string[],
     count?: number,
@@ -73,7 +77,6 @@ describe("KOTH public rotation", () => {
         "goldMultiplier",
         "isAlliancesDisabled",
         "isCompact",
-        "isCrowded",
         "isPeaceTime",
         "isRandomSpawn",
         "isSAMsDisabled",
@@ -84,6 +87,7 @@ describe("KOTH public rotation", () => {
       expect(excluded).toEqual(
         expect.arrayContaining([
           "isKingOfTheHill",
+          "isCrowded",
           "isNukesDisabled",
           "isWaterNukes",
           "isHardNations",
@@ -140,19 +144,43 @@ describe("KOTH public rotation", () => {
   });
 
   it.each([0.1, 0.4, 0.8])(
-    "uses ordinary map capacity tiers at roll %s",
+    "uses the lowest Normal tier regardless of the roll (%s)",
     async (roll) => {
       const p = internal(new MapPlaylist());
       vi.spyOn(Math, "random").mockReturnValue(roll);
       vi.spyOn(p, "getRandomSpecialGameModifiers").mockReturnValue({
         goldMultiplier: 2,
       });
-      const c = await p.getSpecialConfig(false, true);
-      expect(c.gameMapSize).toBe(GameMapSize.Normal);
-      // 1M land: 50/40/25, with the normal 1.5x team adjustment and team rounding.
-      if (c.gameMode === GameMode.FFA)
-        expect(c.maxPlayers).toBe(roll < 0.3 ? 50 : 40);
-      else expect(c.maxPlayers).toBeLessThanOrEqual(38);
+      vi.spyOn(p, "getTeamCount").mockReturnValue(3);
+      const ffa = await p.getSpecialConfig(false, true, GameMode.FFA);
+      const team = await p.getSpecialConfig(false, true, GameMode.Team);
+      expect(ffa.gameMapSize).toBe(GameMapSize.Normal);
+      expect(ffa.maxPlayers).toBe(25);
+      expect(team.gameMapSize).toBe(GameMapSize.Normal);
+      expect(team.playerTeams).toBe(3);
+      expect(team.maxPlayers).toBe(24);
+    },
+  );
+
+  it.each([
+    [0.1, 12, 12],
+    [0.4, 10, 12],
+    [0.8, 6, 8],
+  ])(
+    "uses the normal Compact sizing rules at roll %s",
+    async (roll, ffaCapacity, teamCapacity) => {
+      const p = internal(new MapPlaylist());
+      vi.spyOn(Math, "random").mockReturnValue(roll);
+      vi.spyOn(p, "getRandomSpecialGameModifiers").mockReturnValue({
+        isCompact: true,
+      });
+      vi.spyOn(p, "getTeamCount").mockReturnValue(2);
+      const ffa = await p.getSpecialConfig(false, true, GameMode.FFA);
+      const team = await p.getSpecialConfig(false, true, GameMode.Team);
+      expect(ffa.gameMapSize).toBe(GameMapSize.Compact);
+      expect(ffa.maxPlayers).toBe(ffaCapacity);
+      expect(team.gameMapSize).toBe(GameMapSize.Compact);
+      expect(team.maxPlayers).toBe(teamCapacity);
     },
   );
 

@@ -130,6 +130,11 @@ export class HostLobbyModal extends BaseModal {
   @state() private whitelistEnabled: boolean = false;
   @state() private allowedPublicIds: string = "";
   @state() private kingOfTheHill = false;
+  private mapBeforeKingOfTheHill?: {
+    map: GameMapType;
+    useRandomMap: boolean;
+  };
+
   private get kothDisabledReason(): string | undefined {
     if (this.kingOfTheHill) return undefined;
     if (this.waterNukes)
@@ -1181,7 +1186,7 @@ export class HostLobbyModal extends BaseModal {
     this.nameReveals = [];
     this.whitelistEnabled = false;
     this.allowedPublicIds = "";
-    this.kingOfTheHill = false;
+    this.setKingOfTheHill(false);
     this.waterNukes = false;
     this.hostCheatsEnabled = false;
     this.hostCheatInfiniteGold = false;
@@ -1200,24 +1205,34 @@ export class HostLobbyModal extends BaseModal {
     this.autoStartAt = null;
   }
 
-  private async handleSelectRandomMap() {
-    this.useRandomMap = true;
-    this.selectedMap = this.kingOfTheHill
+  private handleSelectRandomMap() {
+    const map = this.kingOfTheHill
       ? rollKingOfTheHillMap(Math.random())
       : getRandomMapType();
-    await this.loadNationCount();
-    void this.putGameConfig();
+    return this.handleMapSelection(map, true);
   }
 
   private handleConfigRandomMapSelected = () => {
     void this.handleSelectRandomMap();
   };
 
-  private async handleMapSelection(value: GameMapType) {
+  private async handleMapSelection(value: GameMapType, useRandomMap = false) {
     this.selectedMap = value;
-    this.useRandomMap = false;
+    this.useRandomMap = useRandomMap;
     await this.loadNationCount();
     void this.putGameConfig();
+  }
+
+  private setKingOfTheHill(enabled: boolean) {
+    if (enabled && !this.kingOfTheHill) {
+      this.mapBeforeKingOfTheHill = {
+        map: this.selectedMap,
+        useRandomMap: this.useRandomMap,
+      };
+    } else if (!enabled) {
+      this.mapBeforeKingOfTheHill = undefined;
+    }
+    this.kingOfTheHill = enabled;
   }
 
   private handleConfigMapSelected = (e: Event) => {
@@ -1284,7 +1299,7 @@ export class HostLobbyModal extends BaseModal {
         this.anonymizeNames = checked;
         void this.putGameConfig();
         break;
-      case "king_of_the_hill.name":
+      case "king_of_the_hill.name": {
         if (checked && this.waterNukes) {
           showToast(
             translateText("king_of_the_hill.water_nukes_blocked"),
@@ -1304,7 +1319,15 @@ export class HostLobbyModal extends BaseModal {
           return;
         }
         this.kothLoadedFor = this.lobbyId;
-        this.kingOfTheHill = checked;
+        const previousMap = this.mapBeforeKingOfTheHill;
+        this.setKingOfTheHill(checked);
+        if (!checked && previousMap) {
+          void this.handleMapSelection(
+            previousMap.map,
+            previousMap.useRandomMap,
+          );
+          break;
+        }
         if (checked && !isKingOfTheHillMap(this.selectedMap)) {
           void this.handleMapSelection(KING_OF_THE_HILL_MAPS[0]);
           return;
@@ -1312,6 +1335,7 @@ export class HostLobbyModal extends BaseModal {
         this.useRandomMap = false;
         void this.putGameConfig();
         break;
+      }
       case "game_settings.water_nukes":
         if (checked && this.kingOfTheHill) {
           showToast(
@@ -1903,6 +1927,7 @@ export class HostLobbyModal extends BaseModal {
   }
 
   private async importPresetConfig(config: LobbyPresetConfig) {
+    this.setKingOfTheHill(config.kingOfTheHill ?? false);
     this.useRandomMap = config.useRandomMap ?? false;
     this.selectedMap = this.useRandomMap ? getRandomMapType() : config.gameMap;
     this.compactMap = config.compactMap ?? false;
@@ -1926,7 +1951,6 @@ export class HostLobbyModal extends BaseModal {
     this.startingGoldValue = config.startingGoldValue;
     this.customAlliances = config.customAlliances ?? false;
     this.customAllianceMinutes = config.customAllianceMinutes;
-    this.kingOfTheHill = config.kingOfTheHill ?? false;
     this.waterNukes = config.waterNukes ?? false;
     this.doomsdayClock = config.doomsdayClock ?? false;
     this.doomsdayClockSpeed = config.doomsdayClockSpeed ?? "normal";

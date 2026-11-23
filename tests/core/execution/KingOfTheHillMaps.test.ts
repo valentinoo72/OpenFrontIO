@@ -1,22 +1,55 @@
+import { TileRef } from "@openfront/engine-api/game/GameMap";
 import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
 import {
   isThronePlacementTile,
   KING_OF_THE_HILL_MAPS,
   isKingOfTheHillMap,
   rollKingOfTheHillMap,
+  throneSiteBounds,
 } from "@openfront/engine-lib/game/KingOfTheHill";
 import { loadTerrainMap } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { describe, expect, it } from "vitest";
 import { kothFiles, kothMaps } from "../../util/kothMaps";
 
+const newIslandSites = [
+  [GameMapType.IrishSea, [[778, 727]], [[254, 514]]],
+  [
+    GameMapType.Sierpinski,
+    [
+      [233, 233],
+      [699, 233],
+      [1166, 233],
+      [233, 699],
+      [1166, 699],
+      [233, 1166],
+      [699, 1166],
+      [1166, 1166],
+    ],
+    [
+      [699, 699],
+      [78, 78],
+    ],
+  ],
+  [
+    GameMapType.Conakry,
+    [[1271, 916]],
+    [
+      [1193, 882],
+      [1259, 815],
+    ],
+  ],
+  [GameMapType.Levant, [[985, 958]], [[1100, 242]]],
+] as const;
+
 describe("KOTH map sites", () => {
-  it("gives exactly eight maps equal 12.5-percent intervals", () => {
-    expect(KING_OF_THE_HILL_MAPS).toHaveLength(8);
-    for (let i = 0; i < 8; i++) {
-      expect(rollKingOfTheHillMap((i + 0.001) / 8)).toBe(
+  it("gives all twelve maps equal intervals in the public rotation", () => {
+    const count = KING_OF_THE_HILL_MAPS.length;
+    expect(count).toBe(12);
+    for (let i = 0; i < count; i++) {
+      expect(rollKingOfTheHillMap((i + 0.001) / count)).toBe(
         KING_OF_THE_HILL_MAPS[i],
       );
-      expect(rollKingOfTheHillMap((i + 0.999) / 8)).toBe(
+      expect(rollKingOfTheHillMap((i + 0.999) / count)).toBe(
         KING_OF_THE_HILL_MAPS[i],
       );
     }
@@ -57,6 +90,41 @@ describe("KOTH map sites", () => {
               size,
             ),
           ).toBe(true);
+      },
+    );
+    it.each(newIslandSites)(
+      "includes the whole intended islands on %s, " + size,
+      async (type, seeds, excluded) => {
+        const { gameMap: map } = await loadTerrainMap(kothFiles(type, size));
+        const scale = size === GameMapSize.Compact ? 2 : 1;
+        const ref = (x: number, y: number) =>
+          map.ref(Math.floor(x / scale), Math.floor(y / scale));
+        const expected = new Set<TileRef>();
+        for (const [x, y] of seeds) {
+          const island = map.bfs(
+            ref(x, y),
+            (_, tile) => map.isLand(tile) && !map.isImpassable(tile),
+          );
+          expect(island.size).toBeGreaterThan(0);
+          for (const tile of island) expected.add(tile);
+        }
+        const bounds = throneSiteBounds(type, size);
+        expect(bounds).toHaveLength(seeds.length);
+        const marked = new Set<TileRef>();
+        for (const [left, top, right, bottom] of bounds) {
+          for (let y = top; y < bottom; y++) {
+            for (let x = left; x < right; x++) {
+              const tile = map.ref(x, y);
+              if (isThronePlacementTile(map, type, tile, size))
+                marked.add(tile);
+            }
+          }
+        }
+        expect(marked.size).toBe(expected.size);
+        expect([...expected].every((tile) => marked.has(tile))).toBe(true);
+        for (const [x, y] of excluded) {
+          expect(isThronePlacementTile(map, type, ref(x, y), size)).toBe(false);
+        }
       },
     );
   }

@@ -18,6 +18,10 @@ export const KING_OF_THE_HILL_MAPS = [
   GameMapType.Luna,
   GameMapType.TradersDream,
   GameMapType.Sol,
+  GameMapType.IrishSea,
+  GameMapType.Sierpinski,
+  GameMapType.Conakry,
+  GameMapType.Levant,
 ] as const;
 
 type Point = readonly [x: number, y: number];
@@ -52,6 +56,22 @@ const sites: Partial<Record<GameMapId, readonly Site[]>> = {
     { bounds: [966, 823, 1237, 1081], seed: [1100, 960] },
   ],
   [GameMapType.Sol]: [{ bounds: [1937, 987, 2496, 1546], seed: [2216, 1050] }],
+  [GameMapType.IrishSea]: [{ bounds: [668, 642, 837, 859], seed: [778, 727] }],
+  // The eight medium islands surrounding the large central island.
+  [GameMapType.Sierpinski]: [
+    { bounds: [156, 156, 311, 311], seed: [233, 233] },
+    { bounds: [622, 156, 778, 311], seed: [699, 233] },
+    { bounds: [1089, 156, 1244, 311], seed: [1166, 233] },
+    { bounds: [156, 622, 311, 778], seed: [233, 699] },
+    { bounds: [1089, 622, 1244, 778], seed: [1166, 699] },
+    { bounds: [156, 1089, 311, 1244], seed: [233, 1166] },
+    { bounds: [622, 1089, 778, 1244], seed: [699, 1166] },
+    { bounds: [1089, 1089, 1244, 1244], seed: [1166, 1166] },
+  ],
+  [GameMapType.Conakry]: [
+    { bounds: [1262, 890, 1288, 927], seed: [1271, 916] },
+  ],
+  [GameMapType.Levant]: [{ bounds: [762, 775, 1299, 1092], seed: [985, 958] }],
 };
 
 export function isKingOfTheHillMap(

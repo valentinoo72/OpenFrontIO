@@ -1,3 +1,5 @@
+import { GameMapType } from "@openfront/engine-api/game/GameTypes";
+import { GameConfigPatch } from "@openfront/engine-api/Schemas";
 import { render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -91,4 +93,59 @@ describe("HostLobbyModal Steam invite button", () => {
 
     expect(presenceMocks.openInviteDialog).toHaveBeenCalledOnce();
   });
+});
+
+describe("HostLobbyModal KOTH map selection", () => {
+  it.each([false, true])(
+    "restores the previous map and Random Map setting (%s)",
+    async (useRandomMap) => {
+      const modal = new HostLobbyModal();
+      const state = modal as unknown as {
+        selectedMap: GameMapType;
+        useRandomMap: boolean;
+        handleConfigOptionToggleChanged(event: Event): void;
+        handleMapSelection(map: GameMapType): Promise<void>;
+        loadNationCount(): Promise<void>;
+        constructUrl(): Promise<string>;
+        updateLobbyHistory(url: string): void;
+      };
+      state.selectedMap = GameMapType.Europe;
+      state.useRandomMap = useRandomMap;
+      vi.spyOn(state, "loadNationCount").mockResolvedValue(undefined);
+      vi.spyOn(state, "constructUrl").mockResolvedValue("http://localhost/");
+      vi.spyOn(state, "updateLobbyHistory").mockImplementation(() => {});
+      let lastConfig: GameConfigPatch | undefined;
+      modal.addEventListener("update-game-config", (event) => {
+        lastConfig = (event as CustomEvent<{ config: GameConfigPatch }>).detail
+          .config;
+      });
+      const toggleKoth = (checked: boolean) => {
+        state.handleConfigOptionToggleChanged(
+          new CustomEvent("option-toggle-changed", {
+            detail: { labelKey: "king_of_the_hill.name", checked },
+          }),
+        );
+      };
+
+      toggleKoth(true);
+      expect(state.selectedMap).toBe(GameMapType.Tourney3);
+      await state.handleMapSelection(GameMapType.IrishSea);
+      await vi.waitFor(() => {
+        expect(lastConfig).toMatchObject({
+          kingOfTheHill: true,
+          gameMap: GameMapType.IrishSea,
+        });
+      });
+
+      toggleKoth(false);
+      expect(state.selectedMap).toBe(GameMapType.Europe);
+      expect(state.useRandomMap).toBe(useRandomMap);
+      await vi.waitFor(() => {
+        expect(lastConfig).toMatchObject({
+          kingOfTheHill: false,
+          gameMap: GameMapType.Europe,
+        });
+      });
+    },
+  );
 });

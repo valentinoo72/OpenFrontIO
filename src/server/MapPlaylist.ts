@@ -271,9 +271,9 @@ export class MapPlaylist {
         ]
       : [];
 
-    // Crowded raises the count to 60/125, which the trusted cap would undo
-    // anyway; keep its modifier slot for one that still has an effect.
-    if (trusted) {
+    // Crowded overrides the map's player tiers. KOTH uses those tiers, and
+    // trusted lobbies have their own stricter cap.
+    if (trusted || kingOfTheHill) {
       excludedModifiers.push("isCrowded");
     }
 
@@ -442,7 +442,8 @@ export class MapPlaylist {
     }
 
     let unadjustedMaxPlayers =
-      crowdedMaxPlayers ?? (await this.lobbyMaxPlayers(map, mode, isCompact));
+      crowdedMaxPlayers ??
+      (await this.lobbyMaxPlayers(map, mode, isCompact, kingOfTheHill));
     if (trusted) {
       unadjustedMaxPlayers = Math.min(
         unadjustedMaxPlayers,
@@ -942,9 +943,12 @@ export class MapPlaylist {
     map: GameMapType,
     mode: GameMode,
     isCompactMap?: boolean,
+    kingOfTheHill = false,
   ): Promise<number> {
     const landTiles = await getMapLandTiles(map);
     const [l, m, s] = mapPlayerCounts(landTiles);
+    if (kingOfTheHill && !isCompactMap) return s;
+
     const r = Math.random();
     const base = r < 0.3 ? l : r < 0.6 ? m : s;
     let p = Math.min(mode === GameMode.Team ? Math.ceil(base * 1.5) : base, l);
