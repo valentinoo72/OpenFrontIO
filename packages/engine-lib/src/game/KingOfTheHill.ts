@@ -69,7 +69,10 @@ const sites: Partial<Record<GameMapId, readonly Site[]>> = {
     { bounds: [1089, 1089, 1244, 1244], seed: [1166, 1166] },
   ],
   [GameMapType.Conakry]: [
+    { bounds: [1244, 803, 1364, 881], seed: [1259, 815] },
+    { bounds: [1178, 844, 1249, 985], seed: [1193, 882] },
     { bounds: [1262, 890, 1288, 927], seed: [1271, 916] },
+    { bounds: [1352, 890, 1358, 916], seed: [1355, 905] },
   ],
   [GameMapType.Levant]: [{ bounds: [762, 775, 1299, 1092], seed: [985, 958] }],
 };

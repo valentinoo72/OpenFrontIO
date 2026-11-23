@@ -267,7 +267,6 @@ export class MapPlaylist {
           "isWaterNukes",
           "isHardNations",
           "isDoomsdayClock",
-          "startingGold25M",
         ]
       : [];
 

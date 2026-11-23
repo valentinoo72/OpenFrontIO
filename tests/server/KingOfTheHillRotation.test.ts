@@ -45,6 +45,7 @@ describe("KOTH public rotation", () => {
     vi.spyOn(Math, "random").mockImplementation(() => random.next());
     const modes = new Set<GameMode>();
     const modifiers = new Set<string>();
+    const startingGoldTiers = new Set<number>();
     for (let i = 0; i < 200; i++) {
       const c = await p.getSpecialConfig(i % 2 === 0, true);
       modes.add(c.gameMode);
@@ -54,7 +55,13 @@ describe("KOTH public rotation", () => {
       expect(c.waterNukes).not.toBe(true);
       expect(c.doomsdayClock).toBeUndefined();
       expect(c.overtime).toBeUndefined();
-      expect(c.startingGold).not.toBe(25_000_000);
+      if (typeof c.startingGold === "number")
+        startingGoldTiers.add(c.startingGold);
+      if (c.startingGold === 25_000_000) {
+        expect(c.spawnImmunityDuration).toBe(
+          c.publicGameModifiers?.isPeaceTime ? 2400 : 1500,
+        );
+      }
       for (const u of [
         UnitType.AtomBomb,
         UnitType.HydrogenBomb,
@@ -72,6 +79,9 @@ describe("KOTH public rotation", () => {
       if (i % 2 === 0) expect(c.maxPlayers).toBeLessThanOrEqual(25);
     }
     expect(modes).toEqual(new Set([GameMode.FFA, GameMode.Team]));
+    expect(startingGoldTiers).toEqual(
+      new Set([1_000_000, 5_000_000, 25_000_000]),
+    );
     expect(modifiers).toEqual(
       new Set([
         "goldMultiplier",
@@ -92,7 +102,6 @@ describe("KOTH public rotation", () => {
           "isWaterNukes",
           "isHardNations",
           "isDoomsdayClock",
-          "startingGold25M",
         ]),
       );
   });

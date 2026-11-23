@@ -102,7 +102,7 @@ describe("KOTH host settings", () => {
 });
 
 describe("KOTH presentation", () => {
-  it("shows all eight supported maps together", async () => {
+  it("shows all supported maps together", async () => {
     vi.stubGlobal(
       "IntersectionObserver",
       class {

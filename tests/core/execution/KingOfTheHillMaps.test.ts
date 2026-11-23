@@ -32,10 +32,15 @@ const newIslandSites = [
   ],
   [
     GameMapType.Conakry,
-    [[1271, 916]],
     [
-      [1193, 882],
       [1259, 815],
+      [1193, 882],
+      [1271, 916],
+      [1355, 905],
+    ],
+    [
+      [1271, 221],
+      [1271, 760],
     ],
   ],
   [GameMapType.Levant, [[985, 958]], [[1100, 242]]],
@@ -45,6 +50,7 @@ describe("KOTH map sites", () => {
   it("gives all twelve maps equal intervals in the public rotation", () => {
     const count = KING_OF_THE_HILL_MAPS.length;
     expect(count).toBe(12);
+    expect(new Set(KING_OF_THE_HILL_MAPS).size).toBe(count);
     for (let i = 0; i < count; i++) {
       expect(rollKingOfTheHillMap((i + 0.001) / count)).toBe(
         KING_OF_THE_HILL_MAPS[i],
