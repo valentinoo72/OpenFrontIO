@@ -1623,19 +1623,31 @@ export class PlayerImpl implements Player {
     targetTile: TileRef,
     validTiles: TileRef[] | null,
   ): TileRef | false {
-    if (
-      unitType !== UnitType.Throne &&
-      Structures.has(unitType) &&
-      this.mg.config().isKingOfTheHill()
-    ) {
-      const { gameMap, gameMapSize } = this.mg.config().gameConfig();
-      if (isThronePlacementTile(this.mg, gameMap, targetTile, gameMapSize))
-        return false;
+    const config = this.mg.config();
+    if (Structures.has(unitType) && config.isKingOfTheHill()) {
+      const { gameMap, gameMapSize, maxTimerValue } = config.gameConfig();
+      const map = this.mg.map();
+      const inThroneSite = (tile: TileRef) =>
+        isThronePlacementTile(map, gameMap, tile, gameMapSize);
+      const targetInThroneSite = inThroneSite(targetTile);
+      if (unitType === UnitType.Throne) {
+        const timeLimit = maxTimerValue ?? 0;
+        if (
+          !targetInThroneSite ||
+          this.mg.inSpawnPhase() ||
+          this.mg.isSpawnImmunityActive() ||
+          this.mg.getWinner() !== null ||
+          (timeLimit > 0 && this.mg.elapsedGameSeconds() >= timeLimit * 60)
+        ) {
+          return false;
+        }
+        const tiles = validTiles ?? this.validStructureSpawnTiles(targetTile);
+        return tiles.find(inThroneSite) ?? false;
+      }
+      if (targetInThroneSite) return false;
       validTiles = (
         validTiles ?? this.validStructureSpawnTiles(targetTile)
-      ).filter(
-        (tile) => !isThronePlacementTile(this.mg, gameMap, tile, gameMapSize),
-      );
+      ).filter((tile) => !inThroneSite(tile));
     }
     switch (unitType) {
       case UnitType.MIRV:
@@ -1667,31 +1679,8 @@ export class PlayerImpl implements Player {
       case UnitType.City:
       case UnitType.Factory:
         return this.landBasedStructureSpawn(targetTile, validTiles);
-      case UnitType.Throne: {
-        const config = this.mg.config();
-        const map = this.mg.map();
-        const { gameMap, gameMapSize } = config.gameConfig();
-        const timeLimit = config.gameConfig().maxTimerValue;
-        if (
-          this.type() !== PlayerType.Human ||
-          this.mg.inSpawnPhase() ||
-          this.mg.isSpawnImmunityActive() ||
-          this.mg.getWinner() !== null ||
-          (timeLimit !== undefined &&
-            timeLimit !== null &&
-            timeLimit > 0 &&
-            this.mg.elapsedGameSeconds() >= timeLimit * 60) ||
-          !isThronePlacementTile(map, gameMap, targetTile, gameMapSize)
-        ) {
-          return false;
-        }
-        const tiles = validTiles ?? this.validStructureSpawnTiles(targetTile);
-        return (
-          tiles.find((tile) =>
-            isThronePlacementTile(map, gameMap, tile, gameMapSize),
-          ) ?? false
-        );
-      }
+      case UnitType.Throne:
+        return false;
       default:
         assertNever(unitType);
     }

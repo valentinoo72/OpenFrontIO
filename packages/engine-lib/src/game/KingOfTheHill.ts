@@ -117,13 +117,9 @@ export function isThronePlacementTile(
     y = map.y(tile);
   return (sites[type] ?? []).some((site) => {
     const [left, top, right, bottom] = siteBounds(site, scale);
-    const within = (ref: TileRef): boolean => {
-      const px = map.x(ref),
-        py = map.y(ref);
-      return px >= left && px < right && py >= top && py < bottom;
-    };
-    if (x < left || x >= right || y < top || y >= bottom || !within(tile))
-      return false;
+    const within = (px: number, py: number) =>
+      px >= left && px < right && py >= top && py < bottom;
+    if (!within(x, y)) return false;
     let cached = components.get(map);
     if (!cached) {
       cached = new Map();
@@ -137,7 +133,10 @@ export function isThronePlacementTile(
       );
       component = map.bfs(
         start,
-        (_, ref) => within(ref) && map.isLand(ref) && !map.isImpassable(ref),
+        (_, ref) =>
+          within(map.x(ref), map.y(ref)) &&
+          map.isLand(ref) &&
+          !map.isImpassable(ref),
       );
       cached.set(site, component);
     }

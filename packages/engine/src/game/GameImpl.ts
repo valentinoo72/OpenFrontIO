@@ -705,10 +705,8 @@ export class GameImpl implements Game {
       const holder = this.owner(throne.tile());
       if (!holder.isPlayer()) continue;
       if (throne.owner() !== holder) holder.captureUnit(throne);
-      const team = holder.team();
-      if (team === ColoredTeams.Bot) continue;
       // A throne victory has no land-share requirement for team win credit.
-      this.setWinner(team ?? holder, this.stats().stats(), 0);
+      this.setWinner(holder.team() ?? holder, this.stats().stats(), 0);
       return;
     }
   }

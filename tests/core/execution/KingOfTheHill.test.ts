@@ -1,11 +1,14 @@
 import {
   BuildMenus,
+  ColoredTeams,
   Difficulty,
   GameMapSize,
   GameMapType,
   GameMode,
   GameType,
   HumansVsNations,
+  PlayerInfo,
+  PlayerType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
@@ -324,6 +327,50 @@ describe("KOTH core", () => {
     game.addExecution(new ConstructionExecution(player, UnitType.Throne, tile));
     for (let i = 0; i < THRONE_BUILD_TICKS + 4; i++) game.executeNextTick();
     expect(game.getWinner()).toBe(player.team());
+  });
+
+  it("lets a bot complete a throne and win in FFA", async () => {
+    const game = await makeGame(1);
+    game.endSpawnPhase();
+    const bot = game.addPlayer(
+      new PlayerInfo("Bot", PlayerType.Bot, null, "bot"),
+    );
+    const tile = game.ref(751, 746);
+    bot.conquer(tile);
+    bot.addGold(THRONE_COST);
+    game.addExecution(new ConstructionExecution(bot, UnitType.Throne, tile));
+
+    for (let i = 0; i <= THRONE_BUILD_TICKS; i++) game.executeNextTick();
+    const updates = game.executeNextTick();
+
+    expect(game.getWinner()).toBe(bot);
+    expect(updates[GameUpdateType.Win][0]?.winner).toEqual(["nation", "Bot"]);
+  });
+
+  it("awards a throne victory to the bot team after it captures a throne", async () => {
+    const game = await makeGame(2, { gameMode: GameMode.Team, playerTeams: 2 });
+    game.endSpawnPhase();
+    const [player] = game.players();
+    const bot = game.addPlayer(
+      new PlayerInfo("Bot", PlayerType.Bot, null, "bot"),
+    );
+    const tile = game.ref(751, 746);
+    player.conquer(tile);
+    player.addGold(THRONE_COST);
+    game.addExecution(new ConstructionExecution(player, UnitType.Throne, tile));
+    game.executeNextTick();
+    game.executeNextTick();
+    expect(player.units(UnitType.Throne)).toHaveLength(1);
+    bot.conquer(tile);
+
+    for (let i = 1; i < THRONE_BUILD_TICKS; i++) game.executeNextTick();
+    const updates = game.executeNextTick();
+
+    expect(game.getWinner()).toBe(ColoredTeams.Bot);
+    expect(updates[GameUpdateType.Win][0]?.winner).toEqual([
+      "team",
+      ColoredTeams.Bot,
+    ]);
   });
 
   it("ends a timed hosted game with the normal loss result and prevents a later throne win", async () => {
