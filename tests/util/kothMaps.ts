@@ -20,6 +20,10 @@ export const kothMaps = [
   [GameMapType.ClearwaterLakes, "clearwaterlakes", [441, 577]],
   [GameMapType.Hawaii, "hawaii", [300, 270]],
   [GameMapType.Svalmel, "svalmel", [913, 845]],
+  [GameMapType.ChannelIslands, "channelislands", [2316, 1516]],
+  [GameMapType.BeringStrait, "beringstrait", [708, 373]],
+  [GameMapType.China, "china", [2021, 1609]],
+  [GameMapType.IndianSubcontinent, "indiansubcontinent", [1086, 1735]],
 ] as const;
 
 export function kothFiles(

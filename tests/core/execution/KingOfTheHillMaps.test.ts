@@ -69,12 +69,40 @@ const newIslandSites = [
   ],
   [GameMapType.Hawaii, [[300, 270]], [[615, 197]]],
   [GameMapType.Svalmel, [[913, 845]], [[812, 697]]],
+  [
+    GameMapType.ChannelIslands,
+    [[2316, 1516]],
+    [
+      [3719, 738],
+      [4203, 1645],
+    ],
+  ],
+  [
+    GameMapType.BeringStrait,
+    [
+      [708, 373],
+      [772, 420],
+    ],
+    [
+      [186, 427],
+      [1297, 287],
+    ],
+  ],
+  [
+    GameMapType.China,
+    [
+      [2021, 1609],
+      [1572, 1936],
+    ],
+    [[1737, 1732]],
+  ],
+  [GameMapType.IndianSubcontinent, [[1086, 1735]], [[1073, 1634]]],
 ] as const;
 
 describe("KOTH map sites", () => {
-  it("gives all sixteen maps equal intervals in the public rotation", () => {
+  it("gives all twenty maps equal intervals in the public rotation", () => {
     const count = KING_OF_THE_HILL_MAPS.length;
-    expect(count).toBe(16);
+    expect(count).toBe(20);
     expect(new Set(KING_OF_THE_HILL_MAPS).size).toBe(count);
     for (let i = 0; i < count; i++) {
       expect(rollKingOfTheHillMap((i + 0.001) / count)).toBe(

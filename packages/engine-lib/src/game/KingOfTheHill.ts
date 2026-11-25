@@ -26,6 +26,10 @@ export const KING_OF_THE_HILL_MAPS = [
   GameMapType.ClearwaterLakes,
   GameMapType.Hawaii,
   GameMapType.Svalmel,
+  GameMapType.ChannelIslands,
+  GameMapType.BeringStrait,
+  GameMapType.China,
+  GameMapType.IndianSubcontinent,
 ] as const;
 
 type Point = readonly [x: number, y: number];
@@ -92,6 +96,24 @@ const sites: Partial<Record<GameMapId, readonly Site[]>> = {
   ],
   [GameMapType.Hawaii]: [{ bounds: [238, 223, 335, 342], seed: [300, 270] }],
   [GameMapType.Svalmel]: [{ bounds: [783, 729, 1053, 1024], seed: [913, 845] }],
+  // San Nicolas Island, south of the main island chain.
+  [GameMapType.ChannelIslands]: [
+    { bounds: [2146, 1463, 2510, 1627], seed: [2270, 1549] },
+  ],
+  // Big and Little Diomede.
+  [GameMapType.BeringStrait]: [
+    { bounds: [674, 342, 739, 441], seed: [708, 373] },
+    { bounds: [751, 393, 794, 448], seed: [772, 420] },
+  ],
+  // Taiwan and Hainan.
+  [GameMapType.China]: [
+    { bounds: [1981, 1524, 2040, 1688], seed: [2011, 1610] },
+    { bounds: [1523, 1879, 1629, 1983], seed: [1572, 1935] },
+  ],
+  // Sri Lanka's main island.
+  [GameMapType.IndianSubcontinent]: [
+    { bounds: [1051, 1647, 1176, 1852], seed: [1099, 1718] },
+  ],
 };
 
 export function isKingOfTheHillMap(
