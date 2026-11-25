@@ -110,15 +110,15 @@ export class ConstructionExecution implements Execution {
         {},
       );
       const duration = info.constructionDuration ?? 0;
+      if (this.constructionType === UnitType.Throne) {
+        // Resolve throne progress with the holder after this tick's combat.
+        this.structure.setUnderConstruction(true, ticks + duration);
+        this.active = false;
+        return;
+      }
       if (duration > 0) {
-        const isThrone = this.constructionType === UnitType.Throne;
-        this.structure.setUnderConstruction(
-          true,
-          isThrone ? ticks + duration : undefined,
-        );
-        // The creation tick does not advance the countdown. A throne placed
-        // on T finishes on T + 300.
-        this.ticksUntilComplete = isThrone ? duration - 1 : duration;
+        this.structure.setUnderConstruction(true);
+        this.ticksUntilComplete = duration;
         return;
       }
       // No construction time
@@ -127,7 +127,11 @@ export class ConstructionExecution implements Execution {
       return;
     }
 
-    if (!this.structure.isActive()) {
+    // Older snapshots can still have a pending throne construction here.
+    if (
+      this.constructionType === UnitType.Throne ||
+      !this.structure.isActive()
+    ) {
       this.active = false;
       return;
     }
@@ -185,9 +189,6 @@ export class ConstructionExecution implements Execution {
       case UnitType.City:
       case UnitType.Factory:
         this.mg.addExecution(structureExecution(this.structure!));
-        break;
-      case UnitType.Throne:
-        // The game resolves the completed throne after this tick's combat.
         break;
       default:
         console.warn(

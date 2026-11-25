@@ -84,7 +84,7 @@ type ModifierKey =
   | "isKingOfTheHill";
 
 const WATER_NUKES_WEIGHT = 4;
-const KING_OF_THE_HILL_WEIGHT = 4;
+const KING_OF_THE_HILL_WEIGHT = 3;
 
 // Each entry represents one "ticket" in the pool. More tickets = higher chance of selection.
 // Weights are roughly informed by the community "favorite modifier" poll.

@@ -292,6 +292,7 @@ export interface Unit extends UnitLike {
 
   // Construction phase on structures
   isUnderConstruction(): boolean;
+  constructionEndsAt(): Tick | undefined;
   setUnderConstruction(
     underConstruction: boolean,
     constructionEndsAt?: Tick,

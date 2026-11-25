@@ -41,6 +41,7 @@ import {
 import { ATTACK_INDEX_SENT } from "@openfront/engine-api/StatsSchemas";
 import { renderNumber } from "@openfront/engine-lib/Format";
 import { GameMapImpl } from "@openfront/engine-lib/game/GameMapImpl";
+import { THRONE_BUILD_TICKS } from "@openfront/engine-lib/game/KingOfTheHill";
 import {
   MotionPlanRecord,
   packMotionPlans,
@@ -635,7 +636,7 @@ export class GameImpl implements Game {
       }
     });
     if (this._config.isKingOfTheHill() && this._winner === null) {
-      this.checkThroneWinner();
+      this.advanceThrones();
     }
     if (this.unInitExecs.length > 0) {
       const inited: Execution[] = [];
@@ -690,24 +691,34 @@ export class GameImpl implements Game {
     return this.updates;
   }
 
-  private checkThroneWinner(): void {
-    // Unit updates follow execution order, which also breaks a same-tick tie.
-    for (const update of this.updates[GameUpdateType.Unit]) {
-      if (
-        update.unitType !== UnitType.Throne ||
-        update.underConstruction ||
-        update.constructionEndsAt !== this._ticks
-      ) {
-        continue;
-      }
-      const throne = this.unit(update.id);
-      if (!throne?.isActive() || throne.isUnderConstruction()) continue;
+  private advanceThrones(): void {
+    // Thrones finishing on the same tick are awarded in placement order.
+    const thrones = this.units(UnitType.Throne).sort((a, b) => a.id() - b.id());
+    let winner: Player | null = null;
+    for (const throne of thrones) {
+      const endsAt = throne.constructionEndsAt();
+      if (endsAt === undefined || !throne.isUnderConstruction()) continue;
       const holder = this.owner(throne.tile());
-      if (!holder.isPlayer()) continue;
-      if (throne.owner() !== holder) holder.captureUnit(throne);
+      if (holder.isPlayer() && throne.owner() !== holder) {
+        holder.captureUnit(throne);
+      }
+      if (holder.isPlayer() && holder.type() === PlayerType.Bot) {
+        // One tick passes and one tick of progress is lost.
+        const decayedDeadline = endsAt + 2;
+        const remaining = decayedDeadline - (this._ticks + 1);
+        if (remaining >= THRONE_BUILD_TICKS) {
+          throne.delete(false);
+        } else {
+          throne.setUnderConstruction(true, decayedDeadline);
+        }
+      } else if (this._ticks >= endsAt) {
+        throne.setUnderConstruction(false);
+        if (holder.isPlayer()) winner ??= holder;
+      }
+    }
+    if (winner !== null) {
       // A throne victory has no land-share requirement for team win credit.
-      this.setWinner(holder.team() ?? holder, this.stats().stats(), 0);
-      return;
+      this.setWinner(winner.team() ?? winner, this.stats().stats(), 0);
     }
   }
 

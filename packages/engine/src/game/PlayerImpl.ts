@@ -1633,6 +1633,7 @@ export class PlayerImpl implements Player {
       if (unitType === UnitType.Throne) {
         const timeLimit = maxTimerValue ?? 0;
         if (
+          this.type() === PlayerType.Bot ||
           !targetInThroneSite ||
           this.mg.inSpawnPhase() ||
           this.mg.isSpawnImmunityActive() ||

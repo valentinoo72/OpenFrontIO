@@ -101,6 +101,42 @@ async function encodeSample(frames = 23, keyframeInterval = 10) {
 }
 
 describe("replay format", () => {
+  test("seeks through a throne's decay and resumed build progress", async () => {
+    const enc = new StreamingEncoder({
+      mapWidth: 8,
+      mapHeight: 4,
+      terrain: new Uint8Array(32),
+      gzip,
+      keyframeInterval: 2,
+      gameStartInfo: { gameID: "throne-decay", config: { gameMap: "World" } },
+      numLandTiles: 20,
+    });
+    const starts = [0, 2, 4, 4];
+    for (const [index, start] of starts.entries()) {
+      enc.pushFrame(
+        frame(150 + index, {
+          updates: {
+            [U]: [
+              unit(1, {
+                unitType: UnitType.Throne,
+                ownerID: index === 1 || index === 2 ? 2 : 1,
+                underConstruction: true,
+                constructionEndsAt: start + 300,
+              }),
+            ],
+          },
+        }),
+      );
+    }
+
+    const reader = openReader(await finish(enc));
+    for (const index of [3, 0, 2, 1]) {
+      expect(reader.seek(index).units.get(1)?.constructionStartTick).toBe(
+        starts[index],
+      );
+    }
+  });
+
   test("header, players, unit types and chunks", async () => {
     const reader = await encodeSample();
     const h = reader.header;

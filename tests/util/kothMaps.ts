@@ -16,6 +16,10 @@ export const kothMaps = [
   [GameMapType.Sierpinski, "sierpinski", [233, 233]],
   [GameMapType.Conakry, "conakry", [1271, 916]],
   [GameMapType.Levant, "levant", [985, 958]],
+  [GameMapType.GulfOfGuinea, "gulfofguinea", [1806, 756]],
+  [GameMapType.ClearwaterLakes, "clearwaterlakes", [441, 577]],
+  [GameMapType.Hawaii, "hawaii", [300, 270]],
+  [GameMapType.Svalmel, "svalmel", [913, 845]],
 ] as const;
 
 export function kothFiles(

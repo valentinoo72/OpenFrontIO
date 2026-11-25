@@ -1,6 +1,7 @@
 import {
   GameMode,
   GameType,
+  PlayerType,
   RankedType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
@@ -313,6 +314,7 @@ export class HeadsUpMessage extends LitElement implements Controller {
       if (!throne.isActive() || !throne.isUnderConstruction() || start === null)
         continue;
       const owner = throne.owner();
+      if (owner.type() === PlayerType.Bot) continue;
       const key =
         player === null
           ? "spectator"

@@ -1,6 +1,5 @@
 import {
   BuildMenus,
-  ColoredTeams,
   Difficulty,
   GameMapSize,
   GameMapType,
@@ -25,8 +24,14 @@ import {
 import { ConstructionExecution } from "@openfront/engine/execution/ConstructionExecution";
 import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import { createGameRunner } from "@openfront/engine/GameRunner";
-import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
+import {
+  createGameRunner,
+  createGameRunnerFromSnapshot,
+} from "@openfront/engine/GameRunner";
+import {
+  snapshotGame,
+  snapshotGameData,
+} from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it, vi } from "vitest";
 import { applyGameConfigPatch } from "../../../src/server/ConfigPatch";
 import { kothFiles } from "../../util/kothMaps";
@@ -329,7 +334,7 @@ describe("KOTH core", () => {
     expect(game.getWinner()).toBe(player.team());
   });
 
-  it("lets a bot complete a throne and win in FFA", async () => {
+  it("rejects throne placement by a bot", async () => {
     const game = await makeGame(1);
     game.endSpawnPhase();
     const bot = game.addPlayer(
@@ -338,17 +343,52 @@ describe("KOTH core", () => {
     const tile = game.ref(751, 746);
     bot.conquer(tile);
     bot.addGold(THRONE_COST);
+    expect(bot.canBuild(UnitType.Throne, tile)).toBe(false);
+    const gold = bot.gold();
     game.addExecution(new ConstructionExecution(bot, UnitType.Throne, tile));
-
-    for (let i = 0; i <= THRONE_BUILD_TICKS; i++) game.executeNextTick();
-    const updates = game.executeNextTick();
-
-    expect(game.getWinner()).toBe(bot);
-    expect(updates[GameUpdateType.Win][0]?.winner).toEqual(["nation", "Bot"]);
+    game.executeNextTick();
+    game.executeNextTick();
+    expect(bot.units(UnitType.Throne)).toHaveLength(0);
+    expect(bot.gold()).toBe(gold);
   });
 
-  it("awards a throne victory to the bot team after it captures a throne", async () => {
-    const game = await makeGame(2, { gameMode: GameMode.Team, playerTeams: 2 });
+  it.each([GameMode.FFA, GameMode.Team])(
+    "reverses the captured throne to zero progress in %s",
+    async (gameMode) => {
+      const game = await makeGame(2, { gameMode, playerTeams: 2 });
+      game.endSpawnPhase();
+      const [player] = game.players();
+      const bot = game.addPlayer(
+        new PlayerInfo("Bot", PlayerType.Bot, null, "bot"),
+      );
+      const tile = game.ref(751, 746);
+      player.conquer(tile);
+      player.addGold(THRONE_COST);
+      game.addExecution(
+        new ConstructionExecution(player, UnitType.Throne, tile),
+      );
+      game.executeNextTick();
+      game.executeNextTick();
+      const [throne] = player.units(UnitType.Throne);
+      const deadline = throne.constructionEndsAt()!;
+      while (game.ticks() < deadline - 150) game.executeNextTick();
+      bot.conquer(tile);
+
+      for (let i = 0; i < 149; i++) game.executeNextTick();
+      expect(throne.owner()).toBe(bot);
+      expect(throne.isUnderConstruction()).toBe(true);
+      expect(throne.constructionEndsAt()! - game.ticks()).toBe(299);
+      expect(game.getWinner()).toBeNull();
+
+      const updates = game.executeNextTick();
+      expect(throne.isActive()).toBe(false);
+      expect(updates[GameUpdateType.Win]).toHaveLength(0);
+      expect(game.getWinner()).toBeNull();
+    },
+  );
+
+  it("resumes a decaying throne at its remaining build time after a save and recapture", async () => {
+    const game = await makeGame(2);
     game.endSpawnPhase();
     const [player] = game.players();
     const bot = game.addPlayer(
@@ -360,17 +400,37 @@ describe("KOTH core", () => {
     game.addExecution(new ConstructionExecution(player, UnitType.Throne, tile));
     game.executeNextTick();
     game.executeNextTick();
-    expect(player.units(UnitType.Throne)).toHaveLength(1);
+    const [throne] = player.units(UnitType.Throne);
+    // A capture on the original completion tick must reverse construction too.
+    while (game.ticks() < throne.constructionEndsAt()!) game.executeNextTick();
     bot.conquer(tile);
+    for (let i = 0; i < 70; i++) game.executeNextTick();
+    expect(throne.constructionEndsAt()! - game.ticks()).toBe(70);
+    expect(game.getWinner()).toBeNull();
 
-    for (let i = 1; i < THRONE_BUILD_TICKS; i++) game.executeNextTick();
-    const updates = game.executeNextTick();
+    const { game: restored } = await createGameRunnerFromSnapshot(
+      {
+        gameID: "koth-restore",
+        lobbyCreatedAt: 0,
+        config: game.config().gameConfig(),
+        players: [],
+      },
+      snapshotGame(game),
+      undefined,
+      kothFiles(GameMapType.Tourney4),
+      () => {},
+    );
+    const captured = restored.unit(throne.id())!;
+    const deadline = captured.constructionEndsAt()!;
+    expect(deadline - restored.ticks()).toBe(70);
+    const captor = restored.player(player.id());
+    captor.conquer(tile);
+    while (restored.ticks() < deadline) restored.executeNextTick();
 
-    expect(game.getWinner()).toBe(ColoredTeams.Bot);
-    expect(updates[GameUpdateType.Win][0]?.winner).toEqual([
-      "team",
-      ColoredTeams.Bot,
-    ]);
+    expect(captured.owner()).toBe(captor);
+    expect(restored.getWinner()).toBeNull();
+    restored.executeNextTick();
+    expect(restored.getWinner()).toBe(captor);
   });
 
   it("ends a timed hosted game with the normal loss result and prevents a later throne win", async () => {

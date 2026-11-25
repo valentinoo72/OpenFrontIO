@@ -92,6 +92,8 @@ export type RailroadEvent =
 export interface ConstructionStartEvent {
   unitId: number;
   startTick: number;
+  /** Frame tick when an existing throne's construction progress changed. */
+  tick?: number;
 }
 
 export interface DeadUnitEvent {

@@ -64,6 +64,10 @@ export class ReplayReader {
   readonly header: ReplayHeader;
   private readonly ctx: DecodeCtx;
   private readonly constructionStart = new Map<number, number>();
+  private readonly constructionChanges = new Map<
+    number,
+    { tick: number; startTick: number }[]
+  >();
   /** Inflated chunks, in the order they were last used. */
   private readonly cache = new Map<number, Chunk>();
   private readonly loading = new Map<number, Promise<void>>();
@@ -116,7 +120,14 @@ export class ReplayReader {
     }
     h.spawnPhaseEnd ??= more.events.spawnPhaseEnd;
     for (const e of more.events.constructionStarts) {
-      this.constructionStart.set(e.unitId, e.startTick);
+      if (e.tick === undefined) {
+        this.constructionStart.set(e.unitId, e.startTick);
+      } else {
+        const change = { tick: e.tick, startTick: e.startTick };
+        const changes = this.constructionChanges.get(e.unitId);
+        if (changes) changes.push(change);
+        else this.constructionChanges.set(e.unitId, [change]);
+      }
     }
   }
 
@@ -213,6 +224,18 @@ export class ReplayReader {
     changedTerrain: number[] | null,
     misc: MiscUpdates | null,
   ): ReplayFrame {
+    // The construction timestamp is outside the per-frame unit fields.
+    for (const [id, changes] of this.constructionChanges) {
+      const u = this.units.get(id);
+      if (!u?.underConstruction) continue;
+      u.constructionStartTick = this.constructionStartOf(u);
+      for (let i = changes.length - 1; i >= 0; i--) {
+        const change = changes[i];
+        if (change.tick > this.tick) continue;
+        u.constructionStartTick = change.startTick;
+        break;
+      }
+    }
     return {
       frame: this.frame,
       tick: this.tick,

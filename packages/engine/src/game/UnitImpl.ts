@@ -546,19 +546,30 @@ export class UnitImpl implements Unit {
     return this._underConstruction;
   }
 
+  constructionEndsAt(): Tick | undefined {
+    return this._constructionEndsAt;
+  }
+
   setUnderConstruction(
     underConstruction: boolean,
     constructionEndsAt?: Tick,
   ): void {
-    if (this._underConstruction !== underConstruction) {
+    const stateChanged = this._underConstruction !== underConstruction;
+    const deadlineChanged =
+      underConstruction &&
+      constructionEndsAt !== undefined &&
+      constructionEndsAt !== this._constructionEndsAt;
+    if (!stateChanged && !deadlineChanged) return;
+
+    if (underConstruction) this._constructionEndsAt = constructionEndsAt;
+    if (stateChanged) {
       this._underConstruction = underConstruction;
-      if (underConstruction) this._constructionEndsAt = constructionEndsAt;
       // nearbyUnits skips structures under construction, so this flip changes
       // what a rail plan sees.
       this.mg.noteStructureChange(this);
       this._owner._myUnitsVersion++; // unitsOwned() weighs under-construction units differently
-      this.mg.addUpdate(this.toUpdate());
     }
+    this.mg.addUpdate(this.toUpdate());
   }
 
   hash(): number {

@@ -39,7 +39,7 @@ export class EventCollector {
   private deadUnitEvents: DeadUnitEvent[] = [];
   spawnPhaseEnd: SpawnPhaseEndEvent | null = null;
 
-  private constructing = new Set<number>();
+  private constructing = new Map<number, number>();
 
   /**
    * The events collected since the last call. They're handed over, not
@@ -127,20 +127,21 @@ export class EventCollector {
     }
 
     for (const u of frame.units) {
-      if (u.underConstruction && u.isActive) {
-        if (!this.constructing.has(u.id)) {
-          this.constructing.add(u.id);
-          this.constructionStarts.push({
-            unitId: u.id,
-            startTick:
-              u.unitType === UnitType.Throne
-                ? (u.constructionStartTick ?? tick)
-                : tick,
-          });
-        }
-      } else {
+      if (!u.underConstruction || !u.isActive) {
         this.constructing.delete(u.id);
+        continue;
       }
+      const previousStart = this.constructing.get(u.id);
+      const throneStart =
+        u.unitType === UnitType.Throne ? u.constructionStartTick : null;
+      const startTick = throneStart ?? previousStart ?? tick;
+      if (startTick === previousStart) continue;
+      this.constructing.set(u.id, startTick);
+      this.constructionStarts.push(
+        previousStart === undefined
+          ? { unitId: u.id, startTick }
+          : { unitId: u.id, startTick, tick },
+      );
     }
     // Read from the raw updates like GameView does: a planned unit's last
     // update has where it actually ended up (a nuke's target), while the

@@ -1,4 +1,8 @@
-import { GameMode, GameType } from "@openfront/engine-api/game/GameTypes";
+import {
+  GameMode,
+  GameType,
+  PlayerType,
+} from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import english from "../../resources/lang/en.json";
@@ -31,6 +35,7 @@ describe("KOTH core alerts", () => {
   });
   const player = (id: number) => ({
     smallID: () => id,
+    type: () => (id === 5 ? PlayerType.Bot : PlayerType.Human),
     isOnSameTeam: (p: any) => p.smallID() === 2,
     isAlliedWith: (p: any) => p.smallID() === 4,
     isFriendly: (p: any) => [2, 4].includes(p.smallID()),
@@ -163,6 +168,13 @@ describe("KOTH core alerts", () => {
     hud.tick();
     await hud.updateComplete;
     expect(hud.querySelector("[data-throne-alert]")).toBeNull();
+  });
+  it("counts only the thrones that can finish and win", async () => {
+    thrones = [throne(10, 5, 0), throne(11, 3, 30)];
+    hud.tick();
+    await hud.updateComplete;
+    expect(hud.querySelector("[data-throne-id='10']")).toBeNull();
+    expect(hud.querySelector("[data-throne-id='11']")).not.toBeNull();
   });
   it.each([
     [false, "choose_spawn"],

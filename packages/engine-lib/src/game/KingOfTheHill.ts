@@ -22,6 +22,10 @@ export const KING_OF_THE_HILL_MAPS = [
   GameMapType.Sierpinski,
   GameMapType.Conakry,
   GameMapType.Levant,
+  GameMapType.GulfOfGuinea,
+  GameMapType.ClearwaterLakes,
+  GameMapType.Hawaii,
+  GameMapType.Svalmel,
 ] as const;
 
 type Point = readonly [x: number, y: number];
@@ -75,6 +79,19 @@ const sites: Partial<Record<GameMapId, readonly Site[]>> = {
     { bounds: [1352, 890, 1358, 916], seed: [1355, 905] },
   ],
   [GameMapType.Levant]: [{ bounds: [762, 775, 1299, 1092], seed: [985, 958] }],
+  [GameMapType.GulfOfGuinea]: [
+    { bounds: [1722, 717, 1856, 858], seed: [1806, 756] },
+    { bounds: [1454, 1223, 1487, 1265], seed: [1469, 1248] },
+    { bounds: [1241, 1538, 1315, 1633], seed: [1275, 1578] },
+    { bounds: [1032, 1982, 1041, 2000], seed: [1036, 1989] },
+  ],
+  [GameMapType.ClearwaterLakes]: [
+    { bounds: [350, 550, 458, 590], seed: [441, 577] },
+    { bounds: [409, 508, 481, 532], seed: [468, 521] },
+    { bounds: [469, 476, 562, 498], seed: [524, 487] },
+  ],
+  [GameMapType.Hawaii]: [{ bounds: [238, 223, 335, 342], seed: [300, 270] }],
+  [GameMapType.Svalmel]: [{ bounds: [783, 729, 1053, 1024], seed: [913, 845] }],
 };
 
 export function isKingOfTheHillMap(
