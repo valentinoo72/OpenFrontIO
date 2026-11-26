@@ -1,3 +1,4 @@
+import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   BuildableUnit,
   BuildMenus,
@@ -6,6 +7,11 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { renderNumber } from "@openfront/engine-lib/Format";
+import {
+  isThronePlacementTile,
+  THRONE_COST,
+  throneSiteBounds,
+} from "@openfront/engine-lib/game/KingOfTheHill";
 import { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
@@ -36,6 +42,7 @@ import {
   missileSiloIcon,
   portIcon,
   samLauncherIcon,
+  throneIcon,
   warshipIcon,
 } from "../HotbarIcons";
 import { TutorialHighlight, TutorialHighlightEvent } from "../Tutorial";
@@ -66,7 +73,9 @@ export class UnitDisplay extends LitElement implements Controller {
   private _defensePost = 0;
   private _samLauncher = 0;
   private allDisabled = false;
-  private enabledUnitCount = 0;
+  private showThrone = false;
+  private throneOwnerID: number | null = null;
+  private ownedThroneTiles = new Set<TileRef>();
   private tutorialMode = false;
   private _hoveredUnitTooltip: {
     unitType: PlayerBuildableUnitType;
@@ -132,10 +141,12 @@ export class UnitDisplay extends LitElement implements Controller {
     // the onboarding tutorial fires its atom bomb from here on every screen.
     if (this.tutorialMode) this.classList.remove("hidden");
 
-    this.enabledUnitCount = BuildMenus.types.filter((unitType) =>
-      this.isUnitDisplayed(unitType),
-    ).length;
-    this.allDisabled = this.enabledUnitCount === 0;
+    this.showThrone = this.isUnitDisplayed(UnitType.Throne);
+    this.throneOwnerID = null;
+    this.ownedThroneTiles.clear();
+    this.allDisabled =
+      !this.showThrone &&
+      !BuildMenus.types.some((unitType) => this.isUnitDisplayed(unitType));
 
     const highlightUnits: Partial<
       Record<TutorialHighlight, PlayerBuildableUnitType>
@@ -541,6 +552,7 @@ export class UnitDisplay extends LitElement implements Controller {
   }
 
   private cost(item: UnitType): Gold {
+    if (item === UnitType.Throne) return THRONE_COST;
     for (const bu of this.playerBuildables ?? []) {
       if (bu.type === item) {
         return bu.cost;
@@ -553,6 +565,11 @@ export class UnitDisplay extends LitElement implements Controller {
     if (this.game?.config().isUnitDisabled(item)) return false;
     const player = this.game?.myPlayer();
     switch (item) {
+      case UnitType.Throne:
+        return (
+          this.ownedThroneTiles.size > 0 &&
+          (player?.gold() ?? 0n) >= THRONE_COST
+        );
       case UnitType.AtomBomb:
       case UnitType.HydrogenBomb:
       case UnitType.MIRV:
@@ -577,9 +594,42 @@ export class UnitDisplay extends LitElement implements Controller {
     );
   }
 
+  private updateThroneOwnership(ownerID: number) {
+    const { gameMap, gameMapSize } = this.game.config().gameConfig();
+    const isOwnedSite = (tile: TileRef) =>
+      this.game.ownerID(tile) === ownerID &&
+      isThronePlacementTile(this.game, gameMap, tile, gameMapSize);
+
+    // Seed from the current map once, then process ownership changes per tick.
+    if (ownerID !== this.throneOwnerID) {
+      this.throneOwnerID = ownerID;
+      this.ownedThroneTiles.clear();
+      for (const [left, top, right, bottom] of throneSiteBounds(
+        gameMap,
+        gameMapSize,
+      )) {
+        for (let y = top; y < bottom; y++) {
+          for (let x = left; x < right; x++) {
+            const tile = this.game.ref(x, y);
+            if (isOwnedSite(tile)) this.ownedThroneTiles.add(tile);
+          }
+        }
+      }
+      return;
+    }
+
+    for (const tile of this.game.recentlyUpdatedTiles()) {
+      if (isOwnedSite(tile)) this.ownedThroneTiles.add(tile);
+      else this.ownedThroneTiles.delete(tile);
+    }
+  }
+
   tick() {
     const player = this.game?.myPlayer();
     if (!player) return;
+    if (this.showThrone && !this.game.inSpawnPhase()) {
+      this.updateThroneOwnership(player.smallID());
+    }
     player
       .buildables(undefined, BuildMenus.types)
       .then((buildables) => {
@@ -634,7 +684,7 @@ export class UnitDisplay extends LitElement implements Controller {
           @scroll=${this.onScroll}
         >
           <div
-            class="unit-display-grid grid gap-0.5 grid-rows-1 grid-flow-col auto-cols-fr lg:auto-cols-max lg:w-fit lg:mx-auto side-bar:grid-rows-none side-bar:grid-flow-row side-bar:grid-cols-1"
+            class="unit-display-grid grid gap-0.5 grid-rows-1 grid-flow-col auto-cols-fr lg:w-fit lg:mx-auto side-bar:grid-rows-none side-bar:grid-flow-row side-bar:grid-cols-1 ${this.showThrone ? "" : "lg:auto-cols-max"}"
           >
             ${this.renderUnitItem(
               cityIcon,
@@ -706,6 +756,17 @@ export class UnitDisplay extends LitElement implements Controller {
               "mirv",
               this.getHotkey("buildMIRV", "Digit0"),
             )}
+            ${
+              this.showThrone
+                ? this.renderUnitItem(
+                    throneIcon,
+                    null,
+                    UnitType.Throne,
+                    "throne",
+                    "",
+                  )
+                : nothing
+            }
           </div>
         </div>
         ${this.renderUnitTooltip()}
@@ -765,7 +826,7 @@ export class UnitDisplay extends LitElement implements Controller {
         <div
           class="${
             this.canBuild(unitType) ? "" : "opacity-40"
-          } border border-slate-500 rounded-sm max-lg:landscape:h-7.5 side-bar:h-12 side-bar:min-w-6.5 w-full px-0.5 side-bar:px-0 pb-0.5 flex items-center justify-center gap-0.5 cursor-pointer lg:justify-start
+          } border border-slate-500 rounded-sm max-lg:landscape:h-7.5 side-bar:h-12 side-bar:min-w-6.5 w-full px-0.5 side-bar:px-0 pb-0.5 flex items-center justify-center gap-0.5 cursor-pointer ${unitType === UnitType.Throne ? "" : "lg:justify-start"}
              ${
             selected
               ? "pointer-fine:hover:bg-gray-400/10"
@@ -785,7 +846,7 @@ export class UnitDisplay extends LitElement implements Controller {
               this.suppressReleaseClick = false;
               return;
             }
-            if (selected) {
+            if (this.uiState.ghostStructure === unitType) {
               this.inputHandler.setGhostStructure(null, "GUIclick");
             } else if (this.canBuild(unitType)) {
               this.inputHandler.setGhostStructure(unitType, "GUIclick");
@@ -902,7 +963,11 @@ export class UnitDisplay extends LitElement implements Controller {
           }
         </div>
         <div class="p-2">
-          ${translateText("build_menu.desc." + tooltip.structureKey)}
+          ${translateText(
+            tooltip.unitType === UnitType.Throne
+              ? "king_of_the_hill.build_description"
+              : "build_menu.desc." + tooltip.structureKey,
+          )}
         </div>
         ${
           tooltip.unitType === UnitType.Warship && Platform.hasKeyboard

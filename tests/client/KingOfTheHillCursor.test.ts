@@ -1,3 +1,4 @@
+import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   BuildableUnit,
   GameMapSize,
@@ -8,10 +9,12 @@ import { loadTerrainMap } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { EventBus } from "@openfront/shared/EventBus";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BuildPreviewController } from "../../src/client/controllers/BuildPreviewController";
+import { UnitDisplay } from "../../src/client/hud/layers/UnitDisplay";
 import {
   ContextMenuEvent,
   InputHandler,
   MouseMoveEvent,
+  MouseUpEvent,
   PlaceHoveredThroneEvent,
   UnitSelectionEvent,
 } from "../../src/client/InputHandler";
@@ -48,11 +51,13 @@ async function setup(owner = 1, size = GameMapSize.Normal) {
     smallID: () => 1,
     gold: () => 3_000_000n,
     units: () => [],
+    totalUnitLevels: () => 0,
     buildables: vi.fn(async () => [throne]),
   };
   const game = Object.assign(map, {
     config: () => ({
       isKingOfTheHill: () => true,
+      isUnitDisabled: () => false,
       gameConfig: () => ({ gameMap: GameMapType.Luna, gameMapSize: size }),
     }),
     inSpawnPhase: () => false,
@@ -88,7 +93,11 @@ async function setup(owner = 1, size = GameMapSize.Normal) {
       screenToWorldCoordinatesFloat: (x: number, y: number) => ({ x, y }),
     } as any,
     view as any,
-    { cursorCostLabel: () => true, snapBuildPreview: () => false } as any,
+    {
+      cursorCostLabel: () => true,
+      snapBuildPreview: () => false,
+      nukeAllianceSafetyDuration: () => 0,
+    } as any,
     GameMapType.Luna,
     size,
   );
@@ -112,6 +121,7 @@ async function setup(owner = 1, size = GameMapSize.Normal) {
   return {
     bus,
     build,
+    game,
     contextMenu,
     view,
     player,
@@ -279,3 +289,81 @@ describe("Automatic throne cursor", () => {
     expect(c.contextMenu).toHaveBeenCalledOnce();
   });
 });
+
+it.each([GameMapSize.Normal, GameMapSize.Compact])(
+  "selects, cancels and places a throne from the build bar on %s",
+  async (size) => {
+    const c = await setup(0, size);
+    const site = c.game.ref(c.x, c.y);
+    const owned = new Set<TileRef>();
+    let gold = 1_999_999n;
+    const recentlyUpdatedTiles = vi.fn((): TileRef[] => []);
+    Object.assign(c.game, {
+      ownerID: (tile: TileRef) => (owned.has(tile) ? 1 : 0),
+      recentlyUpdatedTiles,
+    });
+    c.player.gold = () => gold;
+
+    const display = new UnitDisplay();
+    display.game = c.game as any;
+    display.eventBus = c.bus;
+    display.inputHandler = c.input;
+    display.uiState = c.uiState as any;
+    display.init();
+    document.body.append(display);
+    cleanups.push(() => display.remove());
+    display.tick();
+    await display.updateComplete;
+
+    const buttons = display.querySelector(".unit-display-grid")!.children;
+    expect(buttons).toHaveLength(11);
+    expect(buttons[9].querySelector("img")?.src).toContain("MIRVIcon.svg");
+    const item = buttons[10];
+    expect(item.querySelector("img")?.src).toContain("ThroneIconWhite.svg");
+    expect(item.querySelector(".unit-display-hotkey")).toBeNull();
+    const button = item.firstElementChild as HTMLElement;
+    expect(button.classList.contains("opacity-40")).toBe(true);
+
+    owned.add(site);
+    recentlyUpdatedTiles.mockReturnValueOnce([site]);
+    display.tick();
+    await display.updateComplete;
+    expect(button.classList.contains("opacity-40")).toBe(true);
+    button.click();
+    expect(c.uiState.ghostStructure).toBeNull();
+
+    gold = 2_000_000n;
+    display.tick();
+    await display.updateComplete;
+    expect(button.classList.contains("opacity-40")).toBe(false);
+    button.click();
+    expect(c.uiState.ghostStructure).toBe(UnitType.Throne);
+    c.move();
+    await flush();
+    c.frame();
+    expect(c.view.updateGhostPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ ghostType: UnitType.Throne, canBuild: true }),
+    );
+    c.rightClick();
+    expect(c.uiState.ghostStructure).toBeNull();
+    expect(c.view.updateGhostPreview).toHaveBeenLastCalledWith(null);
+    expect(c.contextMenu).not.toHaveBeenCalled();
+    await display.updateComplete;
+
+    button.click();
+    expect(c.uiState.ghostStructure).toBe(UnitType.Throne);
+    c.move();
+    await flush();
+    c.bus.emit(new MouseUpEvent(c.x, c.y));
+    await flush();
+    expect(c.build).toHaveBeenCalledWith(
+      new BuildUnitIntentEvent(UnitType.Throne, site),
+    );
+
+    owned.delete(site);
+    recentlyUpdatedTiles.mockReturnValueOnce([site]);
+    display.tick();
+    await display.updateComplete;
+    expect(button.classList.contains("opacity-40")).toBe(true);
+  },
+);

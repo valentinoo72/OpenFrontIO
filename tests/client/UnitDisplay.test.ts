@@ -41,7 +41,8 @@ function makeDisplay(
     myPlayer: () => player,
     inSpawnPhase: () => false,
     config: () => ({
-      isUnitDisabled: (unitType: UnitType) => disabledUnits.includes(unitType),
+      isUnitDisabled: (unitType: UnitType) =>
+        unitType === UnitType.Throne || disabledUnits.includes(unitType),
       gameConfig: () => ({ tutorial }),
     }),
   } as any;
